@@ -3,13 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "e2e-testing"
+name = "opentrons-app-e2e"
 version = "0.1.0"
-description = "E2E tests for Opentrons Protocol Designer"
+description = "E2E tests for the Opentrons desktop app and Flex ODD"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "eyes-playwright>=6.4.20",
     "httpx>=0.27.0",
     "mypy>=1.13.0",
     "playwright>=1.55.0",
@@ -32,13 +31,10 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = ['fixtures/protocol/9/*']
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = []
-[tool.ruff.lint.per-file-ignores]
-'fixtures/protocol/9/*' = ["ALL"]
 
 [tool.mypy]
 python_version = "3.12"

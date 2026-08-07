@@ -1,4 +1,4 @@
-"""Ensure e2e-testing root is on sys.path for local imports."""
+"""Ensure this workspace root is on sys.path for local imports."""
 
 from __future__ import annotations
 

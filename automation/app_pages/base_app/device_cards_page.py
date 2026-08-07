@@ -71,7 +71,7 @@ TEMPERATURE = ModuleCardSpec(
     "Temperature module",
     "temperatureModuleV2",
     "TEMPERATURE_MODULE_PREFIX",
-    "TD2",
+    "TDV2",
     "exercise_temperature_module_card",
 )
 PLATE_READER = ModuleCardSpec("Plate reader", "absorbanceReaderV1", "PLATE_READER_PREFIX", "OPTMAA")

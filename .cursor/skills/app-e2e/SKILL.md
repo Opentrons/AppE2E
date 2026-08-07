@@ -61,8 +61,9 @@ OPENTRONS_ROOT=/Users/alexcopperman/Downloads/Opentrons_General/opentrons
 - `automation/base_page.py` — shared `BasePage` (via `AppBasePage`)
 - `open_app.py` — launch / attach Electron over CDP
 - `tests/app/conftest.py` — `run_local_app`, robot fixtures, artifacts
+- `tests/odd/` — Flex ODD CDP tests
 
-PD/LL trees may still be present (full `e2e-testing` copy). Prefer app targets only.
+Protocol Designer / Labware Library suites are **not** in this workspace (see monorepo `e2e-testing/`).
 
 ## Conventions
 
