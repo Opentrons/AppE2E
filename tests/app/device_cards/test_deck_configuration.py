@@ -15,9 +15,11 @@ from automation.app_pages import DeckConfigurationPage
 ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list"
 
 # D1 temperature is a single-slot module — safe remove/re-add without touching TC/stackers.
-TEMPERATURE_OPTION = re.compile(r"Temperature Module GEN2")
+# Add-button testids include the USB port, e.g. "Temperature Module GEN2 in USB-4".
+TEMPERATURE_OPTION = re.compile(r"^Temperature Module GEN2")
 TEMPERATURE_CUTOUT = "cutoutD1"
 TEMPERATURE_FIXTURE = "temperatureModuleV2"
+EMPTY_D1_FIXTURES = ("singleLeftSlot", None)
 
 
 def _cutout_fixture(robot_connection: RobotConnection, cutout_id: str) -> str | None:
@@ -59,7 +61,7 @@ def test_deck_configuration(
     device_details_tabs: bool,
     robot_connection: RobotConnection,
 ) -> None:
-    """Open Deck Configuration, remove/re-add Temperature on D1, validate vs robot."""
+    """Ensure Temperature on D1 via remove-if-present then add; validate vs robot."""
     if not device_details_tabs:
         pytest.skip("Deck Configuration tab requires the Device Details tabs layout.")
 
@@ -68,24 +70,31 @@ def test_deck_configuration(
     deck.open()
 
     labels = deck.configured_module_labels()
-    log_step(f"Configured on deck ({len(labels)}): {labels or 'none'}")
-    assert "Temperature" in labels, f"Expected Temperature on deck before exercise; got {labels}"
-
     before_fixture = _cutout_fixture(robot_connection, TEMPERATURE_CUTOUT)
+    log_step(f"Configured on deck ({len(labels)}): {labels or 'none'}")
     log_step(f"Robot {TEMPERATURE_CUTOUT} fixture before: {before_fixture}")
-    assert before_fixture == TEMPERATURE_FIXTURE
 
-    log_step("Remove Temperature from D1 (click configured module)")
-    deck.remove_module_by_label("Temperature")
-    expect(deck.slot("D1")).to_be_visible()
-    assert "Temperature" not in deck.configured_module_labels()
+    if "Temperature" in labels or before_fixture == TEMPERATURE_FIXTURE:
+        log_step("Remove Temperature from D1 so the empty-slot add path can run")
+        deck.remove_module_by_label("Temperature")
+        expect(deck.slot("D1")).to_be_visible()
+        assert "Temperature" not in deck.configured_module_labels()
+        cleared = _wait_for_cutout_fixture(
+            robot_connection, TEMPERATURE_CUTOUT, "singleLeftSlot", timeout_s=10.0
+        )
+        log_step(f"Robot {TEMPERATURE_CUTOUT} after remove: {cleared}")
+    else:
+        assert before_fixture in EMPTY_D1_FIXTURES, (
+            f"Unexpected D1 fixture {before_fixture!r}; expected empty or Temperature"
+        )
+        expect(deck.slot("D1")).to_be_visible()
 
-    log_step("Re-add Temperature Module GEN2 to D1")
+    log_step("Add Temperature Module GEN2 to D1 (Modules → Select options → Add)")
     deck.add_module_to_slot("D1", TEMPERATURE_OPTION)
     expect(deck.module_button("Temperature")).to_be_visible()
 
     after_labels = deck.configured_module_labels()
-    log_step(f"Configured after re-add ({len(after_labels)}): {after_labels}")
+    log_step(f"Configured after add ({len(after_labels)}): {after_labels}")
     assert "Temperature" in after_labels
 
     after_fixture = _wait_for_cutout_fixture(
@@ -93,4 +102,4 @@ def test_deck_configuration(
     )
     log_step(f"Robot {TEMPERATURE_CUTOUT} fixture after: {after_fixture}")
     assert after_fixture == TEMPERATURE_FIXTURE
-    log_done("Deck Configuration remove/re-add validated against robot")
+    log_done("Deck Configuration Temperature on D1 validated against robot")

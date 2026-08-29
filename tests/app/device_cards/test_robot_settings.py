@@ -70,10 +70,10 @@ def test_calibration_pipette_calibrations(robot_settings: RobotSettingsPage) -> 
     cases=(("T69747", "Networking"),),
 )
 def test_networking(robot_settings: RobotSettingsPage) -> None:
-    """T69747: Robot Settings > Networking."""
-    log_step("Validate Networking tab")
+    """T69747: Robot Settings > Networking — active tab + screenshot."""
+    log_step("Open Networking tab and snapshot")
     robot_settings.validate_networking()
-    log_done("Networking OK")
+    log_done("Networking snapshot OK")
 
 
 @pytest.mark.workflow(
@@ -85,8 +85,8 @@ def test_networking(robot_settings: RobotSettingsPage) -> None:
     cases=(("T69748", "Privacy"),),
 )
 def test_privacy(robot_settings: RobotSettingsPage) -> None:
-    """T69748: Robot Settings > Privacy (Camera tab usage controls)."""
-    log_step("Validate Camera privacy/usage controls")
+    """T69748: Robot Settings > Camera — enable camera, exercise usage, screenshot."""
+    log_step("Enable Camera Status, exercise usage settings, screenshot")
     robot_settings.validate_privacy()
     log_done("Privacy OK")
 
@@ -146,6 +146,10 @@ def test_advanced_pause_on_door_open(robot_settings: RobotSettingsPage) -> None:
 )
 def test_home_gantry_from_overview_overflow(robot_settings: RobotSettingsPage) -> None:
     """Home gantry via Robot Overview overflow (not Advanced Settings).
+
+    Must run before any test that loads a protocol onto the robot: Home gantry
+    is disabled while a current protocol run exists (``useIsRobotBusy``).
+    Protocol-run workflows require this node so the UI runner keeps that order.
 
     Uses ``RobotOverviewOverflowMenu_homeGantry_{robot_name}``.
     """

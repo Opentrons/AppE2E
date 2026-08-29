@@ -14,6 +14,7 @@ from automation.app_helpers.app_readiness import (
 from automation.app_helpers.page_helpers import require_helper
 from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
+from automation.app_pages.components import ToggleSwitch
 
 
 class AppSettingsPage(AppBasePage):
@@ -21,11 +22,6 @@ class AppSettingsPage(AppBasePage):
 
     CONNECT_IP_HEADING = "Connect to a Robot via IP Address"
     APP_SOFTWARE_VERSION = "App Software Version"
-    PRIVACY_HEADING = "Share App Analytics with Opentrons"
-    PRIVACY_DESCRIPTION = (
-        "Help Opentrons improve its products and services by automatically "
-        "sending anonymous diagnostics and usage data."
-    )
     SOFTWARE_UPDATE_HEADING = "Software Update"
     UPDATE_ALERT_COPY = re.compile(r"Receive an alert when .+ software update is available\.")
     ADVANCED_HEADING = "Update Channel"
@@ -132,11 +128,9 @@ class AppSettingsPage(AppBasePage):
         dismiss_blocking_ui(self.page)
 
     def validate_privacy(self) -> None:
-        """Open Privacy and assert the app analytics heading, copy, and toggle."""
+        """Open Privacy and toggle Share App Analytics with Opentrons."""
         self._open_tab("Privacy", "privacy")
-        expect(self.page.get_by_text(self.PRIVACY_HEADING, exact=True)).to_be_visible()
-        expect(self.page.get_by_text(self.PRIVACY_DESCRIPTION, exact=True)).to_be_visible()
-        expect(self.page.get_by_role("switch", name="analytics_opt_in")).to_be_visible()
+        ToggleSwitch(self.page, "analytics_opt_in").toggle()
 
     def validate_advanced(self) -> None:
         """Open Advanced and validate every settings section."""

@@ -159,6 +159,68 @@ button:disabled {
   padding: .8rem 1.25rem;
 }
 
+.run-targets {
+  background: #f7f9fc;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  margin: 0;
+  min-inline-size: 0;
+  padding: .9rem 1.25rem 1rem;
+}
+
+.run-targets legend {
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  padding: 0;
+  text-transform: uppercase;
+}
+
+.run-target-fields {
+  display: grid;
+  gap: .75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: .55rem;
+}
+
+.run-targets label {
+  display: flex;
+  flex-direction: column;
+  font-size: .82rem;
+  font-weight: 650;
+  gap: .35rem;
+}
+
+.run-targets input[type="text"] {
+  border: 1px solid var(--line);
+  border-radius: .45rem;
+  font: inherit;
+  font-weight: 500;
+  padding: .55rem .7rem;
+}
+
+.run-targets input[type="text"]:disabled {
+  background: #eef1f4;
+  color: var(--muted);
+}
+
+.run-targets-hint {
+  color: var(--muted);
+  font-size: .78rem;
+  margin: .65rem 0 0;
+}
+
+.run-targets-hint code {
+  font-size: .85em;
+}
+
+@media (max-width: 720px) {
+  .run-target-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
 .readiness span {
   display: flex;
   flex-direction: column;

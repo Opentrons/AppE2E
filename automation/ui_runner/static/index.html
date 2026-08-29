@@ -23,6 +23,39 @@
           </div>
           <button id="refresh" class="secondary" type="button">Refresh catalog</button>
         </div>
+        <fieldset class="run-targets" id="run-targets">
+          <legend>Working with</legend>
+          <div class="run-target-fields">
+            <label>
+              <span>Robot name</span>
+              <input
+                id="robot-name"
+                type="text"
+                name="robot-name"
+                autocomplete="off"
+                spellcheck="false"
+                required
+                placeholder="Devices page name"
+              />
+            </label>
+            <label>
+              <span>Protocol name</span>
+              <input
+                id="protocol-name"
+                type="text"
+                name="protocol-name"
+                autocomplete="off"
+                spellcheck="false"
+                required
+                placeholder="Protocols card title"
+              />
+            </label>
+          </div>
+          <p class="run-targets-hint">
+            Match the robot on Devices and the protocol card title (prefix is fine). Saved to
+            <code>.env</code> when you run.
+          </p>
+        </fieldset>
         <label class="readiness">
           <input id="flex-ready" type="checkbox" />
           <span>

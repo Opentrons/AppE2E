@@ -19,11 +19,12 @@ class RunSetupPage(AppBasePage):
     def step(self, title: str) -> Locator:
         if title not in self.STEPS:
             raise ValueError(f"Unknown run setup step: {title}")
-        heading = self.page.get_by_text(title, exact=True).first
-        return heading.locator(
+        # Titles like "Camera" also appear on RoundTabs — only keep matches that
+        # sit inside a SetupStep accordion (expanded or collapsed content).
+        return self.page.get_by_text(title, exact=True).locator(
             "xpath=ancestor::*[.//*[@data-testid='SetupStep_content_expanded' "
             "or @data-testid='SetupStep_content_collapsed']][1]"
-        )
+        ).first
 
     def expand(self, title: str) -> Locator:
         root = self.step(title)
@@ -40,6 +41,10 @@ class RunSetupPage(AppBasePage):
             "Offsets missing",
             "Check locations and volumes",
             "Check preferences",
+            "Camera enabled",
+            "Camera disabled",
+            "Enabled",
+            "Disabled",
         )
         for value in known:
             locator = root.get_by_text(value, exact=True)
@@ -69,8 +74,11 @@ class RunSetupPage(AppBasePage):
         return StatusChip(self.expand("Camera")).read()
 
     def set_camera_enabled(self, enabled: bool) -> None:
-        switch = ToggleSwitch(self.page, "Camera Status", scope=self.expand("Camera"))
+        root = self.expand("Camera")
+        switch = ToggleSwitch(self.page, "Camera Status", scope=root)
         switch.turn_on() if enabled else switch.turn_off()
+        chip = root.get_by_test_id("Chip_success" if enabled else "Chip_neutral")
+        expect(chip).to_be_visible()
 
     def confirm_camera_preferences(self) -> None:
         self.expand("Camera").get_by_role("button", name="Confirm preferences").click()

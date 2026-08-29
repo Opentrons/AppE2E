@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,7 @@ from fastapi.testclient import TestClient
 from automation.app_helpers.test_progress import log_done, log_step, run_timed, set_event_sink
 from automation.ui_runner.collect_plugin import _validate_prerequisites
 from automation.ui_runner.event_plugin import EventWriter
-from automation.ui_runner.server import ROOT, WorkflowCatalog, app, resolve_repo_path
+from automation.ui_runner.server import ROOT, WorkflowCatalog, _upsert_env_keys, app, resolve_repo_path
 
 
 def _catalog(tmp_path: Path) -> WorkflowCatalog:
@@ -88,6 +89,18 @@ def test_event_writer_adds_test_context_and_ndjson(tmp_path: Path) -> None:
     assert "node_id" not in events[1]
 
 
+def test_event_writer_survives_a_wiped_results_directory(tmp_path: Path) -> None:
+    destination = tmp_path / "results" / "events.ndjson"
+    writer = EventWriter(destination)
+    writer.emit({"type": "session_start"})
+    shutil.rmtree(destination.parent)
+
+    writer.emit({"type": "test_end", "status": "passed"})
+
+    events = [json.loads(line) for line in destination.read_text(encoding="utf-8").splitlines()]
+    assert [event["type"] for event in events] == ["test_end"]
+
+
 def test_progress_output_is_preserved_with_structured_sink(capsys: pytest.CaptureFixture[str]) -> None:
     events: list[dict[str, object]] = []
     set_event_sink(events.append)
@@ -134,3 +147,40 @@ def test_source_api_rejects_missing_and_unsafe_paths() -> None:
     assert missing.status_code == 404
     unsafe = client.get("/api/source", params={"path": "../README.md"})
     assert unsafe.status_code == 400
+
+
+def test_defaults_api_returns_robot_and_protocol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("ROBOT_NAME=UIRobot\nPROTOCOL_NAME=UI Protocol\n", encoding="utf-8")
+    monkeypatch.setattr("automation.ui_runner.server.ENV_PATH", env_path)
+    monkeypatch.delenv("ROBOT_NAME", raising=False)
+    monkeypatch.delenv("PROTOCOL_NAME", raising=False)
+
+    client = TestClient(app)
+    response = client.get("/api/defaults")
+    assert response.status_code == 200
+    assert response.json() == {"robot_name": "UIRobot", "protocol_name": "UI Protocol"}
+
+
+def test_upsert_env_keys_preserves_unrelated_entries(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "# keep me\nROBOT_NAME=Old\nROBOT_IP=10.0.0.1\nOPENTRONS_ROOT=/tmp/opentrons\n",
+        encoding="utf-8",
+    )
+    _upsert_env_keys({"ROBOT_NAME": "NewRobot", "PROTOCOL_NAME": "Smoke"}, path=env_path)
+    text = env_path.read_text(encoding="utf-8")
+    assert "# keep me" in text
+    assert "ROBOT_NAME=NewRobot" in text
+    assert "PROTOCOL_NAME=Smoke" in text
+    assert "ROBOT_IP=10.0.0.1" in text
+    assert "OPENTRONS_ROOT=/tmp/opentrons" in text
+
+
+def test_run_api_requires_robot_and_protocol_names() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/api/run",
+        json={"node_ids": ["tests/test_example.py::test_setup"], "flex_ready": False, "headed": True},
+    )
+    assert response.status_code == 422

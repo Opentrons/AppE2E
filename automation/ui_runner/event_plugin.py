@@ -32,8 +32,22 @@ class EventWriter:
         with self._lock:
             if self._node_id is not None:
                 payload.setdefault("node_id", self._node_id)
-        with self._lock, self.path.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(payload, default=str) + "\n")
+            try:
+                self._append(json.dumps(payload, default=str) + "\n")
+            except OSError:
+                # Reporting progress must never fail the run it is observing:
+                # an exception here surfaces as a pytest INTERNALERROR.
+                pass
+
+    def _append(self, line: str) -> None:
+        """Append one NDJSON line, recreating the file if something removed it."""
+        try:
+            stream = self.path.open("a", encoding="utf-8")
+        except FileNotFoundError:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            stream = self.path.open("a", encoding="utf-8")
+        with stream:
+            stream.write(line)
             stream.flush()
 
 

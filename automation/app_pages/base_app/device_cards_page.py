@@ -407,9 +407,15 @@ class DeviceCardsPage(AppBasePage):
         raise TimeoutError("Timed out waiting for module cards to become ready.")
 
     def has_instrument_card(self, label: str) -> bool:
-        """Return True when an instrument card exists and its overflow menu is enabled."""
+        """Return True when an attached instrument card has an enabled overflow menu.
+
+        Empty pipette/gripper mounts still render a card with Attach in the
+        overflow; those are treated as absent so callers can skip cleanly.
+        """
         card = self._instrument_card(label)
         if card.count() == 0:
+            return False
+        if card.get_by_text(re.compile(r"^Empty$", re.I)).count() > 0:
             return False
         overflow = self._instrument_overflow_button(label)
         return overflow.count() > 0 and not overflow.is_disabled()
@@ -804,11 +810,14 @@ class DeviceCardsPage(AppBasePage):
         self._dismiss_blocking_overlays()
 
     def _open_instrument_overflow(self, label: str) -> bool:
-        """Open an instrument card overflow menu when the card is enabled."""
+        """Open an instrument card overflow menu when an instrument is attached."""
         self._dismiss_blocking_overlays()
         card = self._instrument_card(label)
         if card.count() == 0:
             print(f"  Skipping instrument card '{label}' — not found.")
+            return False
+        if card.get_by_text(re.compile(r"^Empty$", re.I)).count() > 0:
+            print(f"  Skipping instrument card '{label}' — mount is empty.")
             return False
         overflow = self._instrument_overflow_button(label)
         if overflow.is_disabled():
@@ -833,7 +842,12 @@ class DeviceCardsPage(AppBasePage):
         if not self._open_instrument_overflow(label):
             return
 
-        self.page.get_by_role("button", name="About pipette", exact=True).click()
+        about = self.page.get_by_role("button", name="About pipette", exact=True)
+        if about.count() == 0:
+            print(f"  Skipping '{label}' — About pipette not in menu (empty mount).")
+            self._dismiss_blocking_overlays()
+            return
+        about.click()
         serial = self.page.get_by_test_id(ABOUT_PIPETTE_SERIAL).first.inner_text().strip()
 
         firmware = None

@@ -54,24 +54,46 @@ class DeckConfigurationPage(AppBasePage):
             labels.extend([name] * count)
         return labels
 
-    def add_module_to_slot(self, slot_id: str, display_name: str | re.Pattern[str]) -> None:
-        """Open an empty slot and add a module option by Add-button ``data-testid``.
-
-        Option testids look like ``Temperature Module GEN2 in USB-4`` — pass a
-        regex when the USB port is not known up front.
-        """
+    def _open_add_menu(self, slot_id: str) -> None:
+        """Click an empty slot and wait for the Fixtures / Modules chooser modal."""
         self.slot(slot_id).click()
-        self.page.get_by_test_id("Modules").click()
-        option = self.page.get_by_test_id(display_name)
-        expect(option.first).to_be_visible()
-        option.first.click()
+        expect(
+            self.page.get_by_text(
+                "Choose an item below to add to your deck configuration.",
+                exact=False,
+            )
+        ).to_be_visible()
+
+    def _select_add_category(self, category: str) -> None:
+        """Click ``Select options`` for ``Fixtures`` or ``Modules`` (``data-testid``)."""
+        if category not in ("Fixtures", "Modules"):
+            raise ValueError(f"Unknown deck add category: {category}")
+        button = self.page.get_by_test_id(category)
+        expect(button).to_be_visible()
+        button.click()
+
+    def _click_add_option(self, option: str | re.Pattern[str]) -> None:
+        """Click an Add row by option ``data-testid`` (USB port may vary)."""
+        control = self.page.get_by_test_id(option)
+        expect(control.first).to_be_visible()
+        control.first.click()
+
+    def add_module_to_slot(self, slot_id: str, display_name: str | re.Pattern[str]) -> None:
+        """Add any module via empty slot → Modules → Select options → Add.
+
+        Same chooser pattern for every module (Temperature, Magnetic Block, …).
+        Option testids may include a USB port, e.g. ``Temperature Module GEN2 in USB-4``;
+        pass a regex when the port is unknown.
+        """
+        self._open_add_menu(slot_id)
+        self._select_add_category("Modules")
+        self._click_add_option(display_name)
 
     def add_fixture_to_slot(self, slot_id: str, fixture: str | re.Pattern[str]) -> None:
-        self.slot(slot_id).click()
-        self.page.get_by_test_id("Fixtures").click()
-        option = self.page.get_by_test_id(fixture)
-        expect(option.first).to_be_visible()
-        option.first.click()
+        """Add any fixture via empty slot → Fixtures → Select options → Add."""
+        self._open_add_menu(slot_id)
+        self._select_add_category("Fixtures")
+        self._click_add_option(fixture)
         # Some fixtures show a confirmation control with a title-cased testid.
         if isinstance(fixture, str):
             confirmation = self.page.get_by_test_id(fixture.title())

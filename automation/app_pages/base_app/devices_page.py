@@ -191,12 +191,19 @@ class DevicesPage(AppBasePage):
         self.overview_menu().open()
 
     def home_gantry(self) -> None:
-        """Home gantry from Robot Overview overflow: Home gantry."""
+        """Home gantry from Robot Overview overflow: Home gantry.
+
+        Unavailable while the robot has a current protocol run (busy). Run this
+        before any flow that loads a protocol onto the robot.
+        """
         self.open_overflow_menu()
-        self.overview_menu().click_item(
+        menu = self.overview_menu()
+        item = menu.item(
             "Home gantry",
             test_id=f"RobotOverviewOverflowMenu_homeGantry_{self.robot_name}",
         )
+        expect(item).to_be_enabled()
+        item.click()
         dismiss_blocking_ui(self.page)
 
     def open_robot_settings(self) -> None:

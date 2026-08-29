@@ -62,7 +62,7 @@ def test_privacy_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -
     log_step("Open App Settings")
     settings = AppSettingsPage(run_local_app, shots=screenshot_helper)
     settings.navigate()
-    log_step("Validate Privacy tab")
+    log_step("Toggle analytics and screenshot Privacy")
     settings.validate_privacy()
     screenshot_helper.capture("app_settings", "privacy")
     log_done("Privacy tab OK")

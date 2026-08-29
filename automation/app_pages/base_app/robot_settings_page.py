@@ -37,7 +37,8 @@ class RobotSettingsPage(AppBasePage):
     DEVICE_RESET_SLIDEOUT = "Device Reset"
     CAMERA_STATUS = "Camera Status"
     LIVE_VIDEO = "Live video"
-    ERROR_IMAGE_CAPTURE = "Error Recovery"
+    # Visible Usage Settings title; Robot Settings wrongly reuses Live video as aria-label.
+    ERROR_IMAGE_CAPTURE = "Error image capture"
     USAGE_SETTINGS = "Usage Settings"
 
     # Device Reset slideout (Flex calibration / run-history options).
@@ -127,6 +128,19 @@ class RobotSettingsPage(AppBasePage):
         switch.toggle()
         switch.turn_on()
 
+    def _exercise_camera_usage_switch(self, row_title: str) -> None:
+        """Flip a Usage Settings row switch (Robot Settings reuses Live video aria-labels)."""
+        usage = self.page.locator('[data-sentry-component="RobotSettingsCameraUsage"]')
+        row = usage.locator("div").filter(has=self.page.get_by_text(row_title, exact=True)).first
+        switch = row.get_by_role("switch")
+        expect(switch).to_be_visible()
+        was_on = switch.get_attribute("aria-checked") == "true"
+        switch.click()
+        expect(switch).to_have_attribute("aria-checked", "false" if was_on else "true")
+        if switch.get_attribute("aria-checked") != "true":
+            switch.click()
+        expect(switch).to_have_attribute("aria-checked", "true")
+
     def validate_calibration_about(self) -> None:
         """T69745: Calibration > About Calibration. Manual inspection required."""
         self.open_tab("Calibration", "calibration")
@@ -138,23 +152,35 @@ class RobotSettingsPage(AppBasePage):
         print("Pipette Calibraiton covered by validate_calibration_about")
 
     def validate_networking(self) -> None:
-        """T69747: Networking."""
+        """T69747: Select the Networking RoundTab and capture a screenshot."""
         self.open_tab("Networking", "networking")
+        tab = self.page.locator(
+            '[data-sentry-component="RoundTab"]'
+            f'[href="#/devices/{self.robot_name}/robot-settings/networking"]'
+            '[aria-current="page"]'
+        )
+        expect(tab).to_have_text("Networking")
         ScreenshotHelper(self.page).capture("robot_settings", "networking")
-        print("Networking screenshot, to validate credentials")
-        print("ToDo: Disconnect from Wi-Fi and check USB and Ethernet")
 
     def validate_privacy(self) -> None:
-        """T69748: Privacy — validated via Camera usage controls"""
+        """T69748: Camera tab — enable Camera Status, exercise usage toggles, screenshot.
+
+        Usage Settings (Live video / Error image capture) and Camera Controls are
+        only rendered while Camera Status is on — enable first, then exercise them.
+        """
         shots = ScreenshotHelper(self.page)
         self.open_tab("Camera", "camera")
+        camera = self.page.locator('[data-sentry-component="RobotSettingsCamera"]')
+        expect(camera.get_by_text(self.CAMERA_STATUS, exact=True).first).to_be_visible()
         shots.capture("robot_settings", "camera")
 
         self._exercise_switch(self.CAMERA_STATUS)
+        ToggleSwitch(self.page, self.CAMERA_STATUS).turn_on()
         shots.capture("robot_settings", "camera_status")
 
-        self._exercise_switch(self.LIVE_VIDEO)
-        self._exercise_switch(self.ERROR_IMAGE_CAPTURE)
+        expect(camera.get_by_text(self.USAGE_SETTINGS, exact=True)).to_be_visible()
+        self._exercise_camera_usage_switch(self.LIVE_VIDEO)
+        self._exercise_camera_usage_switch(self.ERROR_IMAGE_CAPTURE)
         shots.capture("robot_settings", "camera_usage_toggled")
 
     # Rename slideout rejects the current name (already-exists / not dirty enough).
@@ -298,13 +324,15 @@ class RobotSettingsPage(AppBasePage):
         expect(reinstall.or_(up_to_date)).to_be_visible()
 
     def validate_analytics(self) -> None:
-        """Analytics: Camera usage settings on the Camera tab."""
+        """Analytics: Camera usage settings on the Camera tab (requires camera on)."""
         self.open_tab("Camera", "camera")
-        usage = self.page.get_by_text(self.USAGE_SETTINGS, exact=True)
-        if usage.count() == 0:
-            expect(self.page.get_by_text(self.CAMERA_STATUS, exact=True)).to_be_visible()
-            return
+        ToggleSwitch(self.page, self.CAMERA_STATUS).turn_on()
+        usage = self.page.locator('[data-sentry-component="RobotSettingsCamera"]').get_by_text(
+            self.USAGE_SETTINGS, exact=True
+        )
         expect(usage).to_be_visible()
+        self._exercise_camera_usage_switch(self.LIVE_VIDEO)
+        self._exercise_camera_usage_switch(self.ERROR_IMAGE_CAPTURE)
 
     def open_device_reset_slideout(self) -> None:
         """Advanced > Device Reset > Choose reset settings."""

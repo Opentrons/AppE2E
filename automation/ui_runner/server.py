@@ -23,6 +23,63 @@ ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
 RESULTS_DIR = ROOT / "test-results"
 ARTIFACTS_DIR = ROOT / "artifacts"
+ENV_PATH = ROOT / ".env"
+DEFAULT_PROTOCOL_NAME = "Flex Smoke Test"
+
+
+def _load_env_file(path: Path | None = None) -> dict[str, str]:
+    """Parse a simple KEY=VALUE .env file (comments and blanks ignored)."""
+    target = ENV_PATH if path is None else path
+    if not target.exists():
+        return {}
+    values: dict[str, str] = {}
+    for line in target.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _upsert_env_keys(updates: dict[str, str], path: Path | None = None) -> None:
+    """Update or append keys in ``.env`` while preserving unrelated lines."""
+    target = ENV_PATH if path is None else path
+    existing_lines = target.read_text(encoding="utf-8").splitlines() if target.exists() else []
+    remaining = dict(updates)
+    rewritten: list[str] = []
+    for line in existing_lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in remaining:
+                rewritten.append(f"{key}={remaining.pop(key)}")
+                continue
+        rewritten.append(line)
+    if remaining:
+        if rewritten and rewritten[-1] != "":
+            rewritten.append("")
+        for key, value in remaining.items():
+            rewritten.append(f"{key}={value}")
+    target.write_text("\n".join(rewritten) + "\n", encoding="utf-8")
+
+
+def resolve_run_defaults() -> dict[str, str]:
+    """Defaults for robot/protocol fields: process env, then .env, then built-ins."""
+    from automation.app_helpers.robot_profiles import DEFAULT_HARDWARE_ROBOT_NAME
+
+    file_values = _load_env_file()
+    robot_name = (
+        os.environ.get("ROBOT_NAME", "").strip()
+        or file_values.get("ROBOT_NAME", "").strip()
+        or DEFAULT_HARDWARE_ROBOT_NAME
+    )
+    protocol_name = (
+        os.environ.get("PROTOCOL_NAME", "").strip()
+        or file_values.get("PROTOCOL_NAME", "").strip()
+        or DEFAULT_PROTOCOL_NAME
+    )
+    return {"robot_name": robot_name, "protocol_name": protocol_name}
 
 
 def resolve_repo_path(relative_path: str) -> Path:
@@ -42,6 +99,8 @@ def resolve_repo_path(relative_path: str) -> Path:
 
 class RunRequest(BaseModel):
     node_ids: list[str] = Field(min_length=1)
+    robot_name: str = Field(min_length=1)
+    protocol_name: str = Field(min_length=1)
     flex_ready: bool = False
     headed: bool = True
 
@@ -136,6 +195,8 @@ class EventStream:
         offset = 0
         while True:
             if path.exists():
+                if path.stat().st_size < offset:
+                    offset = 0
                 with path.open(encoding="utf-8") as stream:
                     stream.seek(offset)
                     for line in stream:
@@ -183,19 +244,29 @@ class PytestRunner:
             event_path = RESULTS_DIR / f"ui-events-{self.run_id}.ndjson"
             event_path.write_text("", encoding="utf-8")
             self._cancelled = False
+            robot_name = request.robot_name.strip()
+            protocol_name = request.protocol_name.strip()
+            if not robot_name or not protocol_name:
+                raise ValueError("Robot name and protocol name are required.")
+
             environment = os.environ.copy()
             environment["SKIP_FLEX_SETUP_PROMPT"] = "1"
             # UI suite: record failure, emit video path, continue to the next test (no page.pause).
             environment["E2E_NO_PAUSE"] = "1"
+            environment["ROBOT_NAME"] = robot_name
+            environment["PROTOCOL_NAME"] = protocol_name
             if request.headed:
                 environment["HEADED"] = "1"
             else:
                 environment.pop("HEADED", None)
+            _upsert_env_keys({"ROBOT_NAME": robot_name, "PROTOCOL_NAME": protocol_name})
             command = [
                 sys.executable,
                 "-m",
                 "pytest",
                 *node_ids,
+                "--robot-name",
+                robot_name,
                 "-p",
                 "automation.ui_runner.event_plugin",
                 f"--e2e-events={event_path}",
@@ -207,7 +278,15 @@ class PytestRunner:
                 env=environment,
                 start_new_session=True,
             )
-            await self.events.publish({"type": "runner_start", "run_id": self.run_id, "node_ids": node_ids})
+            await self.events.publish(
+                {
+                    "type": "runner_start",
+                    "run_id": self.run_id,
+                    "node_ids": node_ids,
+                    "robot_name": robot_name,
+                    "protocol_name": protocol_name,
+                }
+            )
             self._completion_task = asyncio.create_task(self._wait_for_completion())
             return node_ids
 
@@ -272,6 +351,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Opentrons E2E Workflow Runner", lifespan=lifespan)
+
+
+@app.get("/api/defaults")
+async def get_defaults() -> dict[str, str]:
+    """Robot and protocol names for the run form (env / .env / built-in)."""
+    return resolve_run_defaults()
 
 
 @app.get("/api/catalog")

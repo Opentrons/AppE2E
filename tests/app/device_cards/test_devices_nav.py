@@ -10,6 +10,7 @@ Robot Settings test plan (``device_cards`` suite — runs before card exercises)
 6. T69750 — Robot Settings > Advanced > Robot server Version
 7. T69751 — Robot Settings > Advanced > Pause protocol when robot door opens
 8. Home gantry — Robot Overview overflow → Home gantry
+   (only while no protocol run is loaded on the robot; protocol_run requires this)
 9. T69753 — Robot settings > Advanced > Jupyter Notebook
 10. T69754 — Robot Settings > Advanced > Update robot software
 11. T69756 — Robot settings > Advanced > Robot Server Reinstall

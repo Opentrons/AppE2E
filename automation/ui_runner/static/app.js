@@ -23,6 +23,8 @@ const elements = {
   refresh: document.querySelector("#refresh"),
   flexReady: document.querySelector("#flex-ready"),
   headed: document.querySelector("#headed"),
+  robotName: document.querySelector("#robot-name"),
+  protocolName: document.querySelector("#protocol-name"),
   connection: document.querySelector("#connection"),
   selectionCovers: document.querySelector("#selection-covers"),
   currentTest: document.querySelector("#current-test"),
@@ -168,6 +170,10 @@ function setToggleState(toggle, nodeIds) {
   toggle.disabled = state.runState !== "idle" || available.length === 0;
 }
 
+function targetsFilled() {
+  return Boolean(elements.robotName.value.trim() && elements.protocolName.value.trim());
+}
+
 function updateControls() {
   for (const [nodeId, input] of state.rowInputs) {
     const test = state.tests.get(nodeId);
@@ -197,12 +203,15 @@ function updateControls() {
   elements.selectionSummary.textContent =
     `${plural(selectedCount, "test")} selected` +
     (requiredCount ? ` · ${plural(requiredCount, "prerequisite")} locked` : "");
-  elements.run.disabled = state.runState !== "idle" || selectedCount === 0 || state.loading;
+  elements.run.disabled =
+    state.runState !== "idle" || selectedCount === 0 || state.loading || !targetsFilled();
   elements.cancel.disabled = state.runState !== "running";
   elements.cancel.textContent = state.runState === "cancelling" ? "Cancelling…" : "Cancel run";
   elements.refresh.disabled = state.runState !== "idle" || state.loading;
   elements.flexReady.disabled = state.runState !== "idle";
   elements.headed.disabled = state.runState !== "idle";
+  elements.robotName.disabled = state.runState !== "idle";
+  elements.protocolName.disabled = state.runState !== "idle";
 }
 
 function applyBulkSelection(nodeIds, checked) {
@@ -367,6 +376,24 @@ async function responseError(response) {
   }
 }
 
+async function loadDefaults() {
+  try {
+    const response = await fetch("/api/defaults");
+    if (!response.ok) throw new Error(await responseError(response));
+    const payload = await response.json();
+    if (!elements.robotName.value && payload.robot_name) {
+      elements.robotName.value = payload.robot_name;
+    }
+    if (!elements.protocolName.value && payload.protocol_name) {
+      elements.protocolName.value = payload.protocol_name;
+    }
+  } catch {
+    // Prefill is best-effort; the form still accepts manual values.
+  } finally {
+    updateControls();
+  }
+}
+
 async function loadCatalog(refresh = false) {
   state.loading = true;
   elements.catalog.setAttribute("aria-busy", "true");
@@ -478,16 +505,25 @@ function locationFrom(eventOrTest) {
 
 async function startRun() {
   if (state.runState !== "idle" || !state.effectiveSelection.size) return;
+  const robotName = elements.robotName.value.trim();
+  const protocolName = elements.protocolName.value.trim();
+  if (!robotName || !protocolName) {
+    elements.runSummary.textContent = "Enter a robot name and protocol name before running.";
+    updateControls();
+    return;
+  }
   state.cancellationRequested = false;
   setRunState("starting");
   resetRunOutput();
-  elements.runSummary.textContent = "Starting run…";
+  elements.runSummary.textContent = `Starting run for ${robotName} · ${protocolName}…`;
   try {
     const response = await fetch("/api/run", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         node_ids: [...state.effectiveSelection],
+        robot_name: robotName,
+        protocol_name: protocolName,
         flex_ready: elements.flexReady.checked,
         headed: elements.headed.checked,
       }),
@@ -495,7 +531,8 @@ async function startRun() {
     if (!response.ok) throw new Error(await responseError(response));
     const body = await response.json();
     setRunState("running");
-    elements.runSummary.textContent = `Running ${plural(body.node_ids.length, "test")}`;
+    elements.runSummary.textContent =
+      `Running ${plural(body.node_ids.length, "test")} · ${robotName} · ${protocolName}`;
   } catch (error) {
     setRunState("idle");
     elements.emptyProgress.classList.remove("hidden");
@@ -789,6 +826,8 @@ elements.selectAll.addEventListener("change", () => {
   applyBulkSelection([...state.tests.keys()], elements.selectAll.checked);
 });
 elements.flexReady.addEventListener("change", reconcileSelection);
+elements.robotName.addEventListener("input", updateControls);
+elements.protocolName.addEventListener("input", updateControls);
 window.addEventListener("online", () => {
   state.reconnectAttempt = 0;
   if (state.reconnectTimer) {
@@ -801,5 +840,6 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") connectEvents();
 });
 
+loadDefaults();
 loadCatalog();
 connectEvents();

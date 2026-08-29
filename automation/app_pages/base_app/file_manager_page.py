@@ -136,11 +136,6 @@ class FileManagerPage(AppBasePage):
         """Remove existing Downloads targets for this robot before save/delete."""
         prepare_file_manager_downloads(self.robot_name)
 
-    def read_capacity(self) -> int:
-        meter = self.page.get_by_role("meter", name="File capacity")
-        expect(meter).to_be_visible()
-        return int(meter.get_attribute("aria-valuenow") or "0")
-
     def diagnostics(self) -> DiagnosticFilesSection:
         root = self.page.locator('[data-sentry-component="DiagnosticsFiles"]').filter(
             has=self.page.get_by_text("Diagnostic Files", exact=True)

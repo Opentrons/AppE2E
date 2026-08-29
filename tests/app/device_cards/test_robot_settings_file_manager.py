@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
+from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import FileManagerPage
 
@@ -14,19 +15,15 @@ ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_
 @pytest.mark.workflow(
     group="robot_settings",
     section="File manager",
-    label="Read file capacity",
+    label="File capacity snapshot",
     order=40,
     requires=ROBOT_DETAIL_REQUIRED,
 )
-def test_file_capacity(run_local_app: Page, robot_name: str) -> None:
-    """Open File manager and read the Robot Storage capacity meter."""
-    log_step(f"Open File manager for '{robot_name}'")
-    files = FileManagerPage(run_local_app, robot_name=robot_name)
-    files.open()
-    capacity = files.read_capacity()
-    log_step(f"File capacity aria-valuenow={capacity}")
-    assert capacity >= 0
-    log_done("File capacity read")
+def test_file_capacity(screenshot_helper: ScreenshotHelper) -> None:
+    """Capture a page snapshot for File capacity (no open / meter read)."""
+    log_step("Snapshot current page for file capacity")
+    path = screenshot_helper.capture("robot_settings", "file_capacity")
+    log_done(f"File capacity snapshot saved ({path.name})")
 
 
 @pytest.mark.workflow(

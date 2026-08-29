@@ -14,6 +14,10 @@ from automation.app_pages import (
     ProtocolsPage,
 )
 
+# Home gantry is disabled once a protocol run is loaded on the robot.
+HOME_GANTRY_REQUIRED = (
+    "tests/app/device_cards/test_robot_settings.py::test_home_gantry_from_overview_overflow"
+)
 PROTOCOL_RUN_TABS = "tests/app/nav/test_protocol_run_tabs.py::test_protocol_run_tabs"
 
 
@@ -22,6 +26,7 @@ PROTOCOL_RUN_TABS = "tests/app/nav/test_protocol_run_tabs.py::test_protocol_run_
     section="Tabs",
     label="Screenshot protocol run tabs",
     order=10,
+    requires=HOME_GANTRY_REQUIRED,
 )
 def test_protocol_run_tabs(
     run_local_app: Page,
