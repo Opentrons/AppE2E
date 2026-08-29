@@ -60,9 +60,11 @@ def ensure_localhost_robot_discovered(
         page.get_by_test_id("manual-ip-hostname-input").fill(host)
         page.get_by_role("button", name="Add").click()
 
-    close = page.get_by_test_id("Slideout_icon_close_Connect to a Robot via IP Address")
-    if close.count() > 0 and close.is_visible():
-        close.click(force=True)
+    close = page.get_by_role("button", name="exit").or_(
+        page.get_by_test_id("Slideout_icon_close_Connect to a Robot via IP Address")
+    )
+    if close.count() > 0 and close.first.is_visible():
+        close.first.click(force=True)
 
     dismiss_blocking_ui(page)
     click_when_ui_ready(page, link(page, "Devices"))

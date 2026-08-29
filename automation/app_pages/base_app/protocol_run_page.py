@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import re
+
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.page_helpers import require_helper
+from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
+from automation.app_pages.components import RoundTabBar, StatusChip
 
 
 class ProtocolRunPage(AppBasePage):
-    """Wait for analysis and start a protocol run from the run header."""
+    """Inspect the protocol run shell and operate its run header."""
 
     ANALYZING_ON_ROBOT = "Analyzing on robot"
     START_RUN = "Start run"
@@ -18,10 +23,76 @@ class ProtocolRunPage(AppBasePage):
     PROCEED_TO_RUN_MODAL = "Are you sure you want to proceed to run?"
     MODAL_SHELL = "ModalShell_ModalArea"
     DEFAULT_ANALYSIS_TIMEOUT_MS = 360_000
+    PROTOCOL_RUN_URL = re.compile(r"protocol-runs/([^/]+)")
+    TABS = (
+        ("Setup", "setup"),
+        ("Parameters", "runtime-parameters"),
+        ("Module Controls", "module-controls"),
+        ("Run Preview", "run-preview"),
+        ("Camera", "camera"),
+    )
 
-    def __init__(self, page: Page) -> None:
+    def __init__(
+        self,
+        page: Page,
+        *,
+        robot_name: str | None = None,
+        run_id: str | None = None,
+        shots: ScreenshotHelper | None = None,
+    ) -> None:
         """Bind the Playwright page."""
         super().__init__(page)
+        self.robot_name = robot_name
+        self.run_id = run_id
+        self.shots = shots
+
+    def wait_until_open(self, *, timeout_ms: int = 60_000) -> None:
+        """Wait until the browser is on a protocol-run details URL."""
+        self.page.wait_for_url(self.PROTOCOL_RUN_URL, timeout=timeout_ms)
+        if self.run_id is None:
+            match = self.PROTOCOL_RUN_URL.search(self.page.url)
+            if match is not None:
+                self.run_id = match.group(1)
+
+    @property
+    def tabs(self) -> RoundTabBar:
+        run_id = self.run_id
+        if run_id is None:
+            match = self.PROTOCOL_RUN_URL.search(self.page.url)
+            if match is not None:
+                run_id = match.group(1)
+                self.run_id = run_id
+        if run_id is not None:
+            base_url = f"protocol-runs/{run_id}"
+        else:
+            base_url = "protocol-runs"
+        return RoundTabBar(self.page, base_url)
+
+    def open_tab(self, label: str, slug: str) -> None:
+        """Open one of the five run-page tabs."""
+        self.tabs.open(label, slug)
+
+    def capture_all_tabs(self) -> None:
+        """Click each present protocol-run tab and screenshot it."""
+        shots = require_helper(self.shots, "ScreenshotHelper", owner="ProtocolRunPage", method="capture_all_tabs")
+        self.wait_until_open()
+        for label, slug in self.TABS:
+            tab = self.tabs.tab(label, slug)
+            if tab.count() == 0:
+                continue
+            self.open_tab(label, slug)
+            shots.capture("protocol_run", slug.replace("-", "_"))
+
+    def read_status(self) -> tuple[str, str]:
+        """Return the run header status chip variant and text."""
+        return StatusChip(self.page).read()
+
+    def read_run_time(self) -> str:
+        """Return the value displayed beside the Run Time label."""
+        label = self.page.get_by_text("Run Time", exact=True)
+        expect(label).to_be_visible()
+        value = label.locator("xpath=following::*[self::p or self::span][1]")
+        return value.inner_text().strip()
 
     def analyzing_button(self) -> Locator:
         """Run header button while protocol analysis is in progress."""

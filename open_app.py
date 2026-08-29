@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import subprocess
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterator
 from pathlib import Path
 
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
@@ -17,6 +19,15 @@ from automation.app_helpers.app_readiness import dismiss_blocking_ui
 DEBUG_PORT = 9222
 ODD_CDP_PORT = 9223
 DEV_CDP_TIMEOUT_S = 180.0
+
+# Installed-app names vary slightly by installer/version (Opentrons.app,
+# Opentrons 8.5.0.app, Opentrons.exe, Opentrons Setup.exe is excluded).
+_MAC_APP_BUNDLE_RE = re.compile(r"^Opentrons(?:[ ._-].+)?\.app$", re.IGNORECASE)
+_MAC_EXECUTABLE_RE = re.compile(r"^Opentrons$", re.IGNORECASE)
+_WIN_EXECUTABLE_RE = re.compile(r"^Opentrons(?:[ ._-].+)?\.exe$", re.IGNORECASE)
+_WIN_INSTALL_DIR_RE = re.compile(r"^Opentrons", re.IGNORECASE)
+_WIN_SKIP_EXE_RE = re.compile(r"(?i)(uninstall|setup|installer|update)")
+_LINUX_EXECUTABLE_RE = re.compile(r"^opentrons$", re.IGNORECASE)
 
 
 def resolve_cdp_endpoint(*, host: str | None = None, port: int | None = None) -> tuple[str, int]:
@@ -55,11 +66,116 @@ def find_monorepo_root() -> Path:
     )
 
 
+def _iter_dir_entries(root: Path, *, max_depth: int) -> Iterator[Path]:
+    """Yield files and directories under ``root`` up to ``max_depth`` (0 = root only)."""
+    if max_depth < 0 or not root.is_dir():
+        return
+    try:
+        entries = list(root.iterdir())
+    except OSError:
+        return
+    for entry in entries:
+        yield entry
+        if max_depth > 0 and entry.is_dir() and not entry.is_symlink():
+            yield from _iter_dir_entries(entry, max_depth=max_depth - 1)
+
+
+def _prefer_exact_name(path: Path, exact: str) -> tuple[int, str]:
+    """Sort key: exact filename first, then shorter / stable names."""
+    return (0 if path.name.lower() == exact.lower() else 1, path.name.lower())
+
+
+def _macos_search_roots() -> list[Path]:
+    return [Path("/Applications"), Path.home() / "Applications"]
+
+
+def _windows_search_roots() -> list[Path]:
+    roots: list[Path] = []
+    for env_key, default in (
+        ("ProgramFiles", r"C:\Program Files"),
+        ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+    ):
+        roots.append(Path(os.environ.get(env_key) or default))
+    local_app = os.environ.get("LOCALAPPDATA")
+    if local_app:
+        roots.append(Path(local_app) / "Programs")
+    return roots
+
+
+def _linux_search_roots() -> list[Path]:
+    return [Path("/usr/bin"), Path("/usr/local/bin"), Path.home() / ".local" / "bin"]
+
+
+def _find_macos_executable() -> Path | None:
+    matches: list[Path] = []
+    for root in _macos_search_roots():
+        for entry in _iter_dir_entries(root, max_depth=0):
+            if not entry.is_dir() or not _MAC_APP_BUNDLE_RE.match(entry.name):
+                continue
+            macos_dir = entry / "Contents" / "MacOS"
+            for binary in _iter_dir_entries(macos_dir, max_depth=0):
+                if binary.is_file() and _MAC_EXECUTABLE_RE.match(binary.name):
+                    matches.append(binary)
+    if not matches:
+        return None
+    matches.sort(key=lambda p: _prefer_exact_name(p.parent.parent.parent, "Opentrons.app"))
+    return matches[0]
+
+
+def _is_windows_app_exe(path: Path) -> bool:
+    return path.is_file() and bool(_WIN_EXECUTABLE_RE.match(path.name)) and not _WIN_SKIP_EXE_RE.search(path.name)
+
+
+def _find_windows_executable() -> Path | None:
+    matches: list[Path] = []
+    for root in _windows_search_roots():
+        for entry in _iter_dir_entries(root, max_depth=0):
+            if _is_windows_app_exe(entry):
+                matches.append(entry)
+            elif entry.is_dir() and _WIN_INSTALL_DIR_RE.match(entry.name):
+                for nested in _iter_dir_entries(entry, max_depth=2):
+                    if _is_windows_app_exe(nested):
+                        matches.append(nested)
+    if not matches:
+        return None
+    matches.sort(key=lambda p: _prefer_exact_name(p, "Opentrons.exe"))
+    return matches[0]
+
+
+def _find_linux_executable() -> Path | None:
+    matches: list[Path] = []
+    for root in _linux_search_roots():
+        for entry in _iter_dir_entries(root, max_depth=0):
+            if entry.is_file() and _LINUX_EXECUTABLE_RE.match(entry.name):
+                matches.append(entry)
+    if not matches:
+        return None
+    matches.sort(key=lambda p: _prefer_exact_name(p, "opentrons"))
+    return matches[0]
+
+
+def _searched_locations(current_os: str) -> str:
+    if current_os == "darwin":
+        roots = _macos_search_roots()
+        pattern = "Opentrons*.app/Contents/MacOS/Opentrons"
+    elif current_os == "windows":
+        roots = _windows_search_roots()
+        pattern = "Opentrons*.exe"
+    elif current_os == "linux":
+        roots = _linux_search_roots()
+        pattern = "opentrons"
+    else:
+        return current_os
+    listed = "\n".join(f"  {root}" for root in roots)
+    return f"{listed}\n(pattern: {pattern})"
+
+
 def get_opentrons_path() -> str:
     """Return the Opentrons executable path for this OS.
 
     Prefers ``OPENTRONS_APP_PATH`` when set (absolute path to the binary), then
-    the standard install location for Windows, macOS, or Linux.
+    searches standard install locations with a name regex so versioned bundles
+    (``Opentrons 8.5.0.app``, etc.) still resolve on other machines.
     """
     override = os.environ.get("OPENTRONS_APP_PATH", "").strip()
     if override:
@@ -69,31 +185,23 @@ def get_opentrons_path() -> str:
         return str(path)
 
     current_os = platform.system().lower()
-
+    found: Path | None
     if current_os == "windows":
-        candidates: list[Path] = []
-        for env_key, default in (
-            ("ProgramFiles", r"C:\Program Files"),
-            ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
-        ):
-            base = os.environ.get(env_key) or default
-            candidates.append(Path(base) / "Opentrons" / "Opentrons.exe")
-        local_app = os.environ.get("LOCALAPPDATA")
-        if local_app:
-            candidates.append(Path(local_app) / "Programs" / "Opentrons" / "Opentrons.exe")
-        for candidate in candidates:
-            if candidate.is_file():
-                return str(candidate)
-        # Prefer the common 64-bit path in the launch error when nothing exists.
-        return str(candidates[0])
+        found = _find_windows_executable()
+    elif current_os == "darwin":
+        found = _find_macos_executable()
+    elif current_os == "linux":
+        found = _find_linux_executable()
+    else:
+        raise OSError(f"Unsupported operating system: {platform.system()}")
 
-    if current_os == "darwin":
-        return "/Applications/Opentrons.app/Contents/MacOS/Opentrons"
-
-    if current_os == "linux":
-        return "/usr/bin/opentrons"
-
-    raise OSError(f"Unsupported operating system: {platform.system()}")
+    if found is None:
+        raise FileNotFoundError(
+            "Could not find the Opentrons desktop app. Searched:\n"
+            f"{_searched_locations(current_os)}\n"
+            "Install the app or set OPENTRONS_APP_PATH to the executable."
+        )
+    return str(found.resolve())
 
 
 def _cdp_is_ready(debug_port: int, *, host: str = "127.0.0.1") -> bool:
@@ -141,7 +249,7 @@ def launch_dev_app(
         popen_kwargs["stderr"] = log_handle
 
     env = {
-        **os.environ,
+        **{k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"},
         "ELECTRON_EXTRA_ARGS": f"--remote-debugging-port={debug_port}",
     }
     process = subprocess.Popen(
@@ -170,8 +278,13 @@ def launch_app(*, debug_port: int = DEBUG_PORT, quiet: bool = True, log_file: Pa
         popen_kwargs["stdout"] = log_handle
         popen_kwargs["stderr"] = log_handle
 
+    # Cursor / VS Code set ELECTRON_RUN_AS_NODE=1 in the agent environment, which
+    # makes the Opentrons Electron binary behave like Node and reject Chromium flags.
+    env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
+
     process = subprocess.Popen(
         [app_path, f"--remote-debugging-port={debug_port}"],
+        env=env,
         **popen_kwargs,
     )
     _wait_for_cdp(debug_port)
@@ -242,9 +355,7 @@ def connect_odd_playwright(
     """
     from automation.app_helpers.robot_connection import resolve_robot_ip
 
-    odd_host = (
-        host or os.environ.get("CDP_HOST", "").strip() or resolve_robot_ip()
-    ).strip()
+    odd_host = (host or os.environ.get("CDP_HOST", "").strip() or resolve_robot_ip()).strip()
     odd_port = debug_port if debug_port is not None else None
     if odd_port is None:
         env_port = os.environ.get("CDP_PORT", "").strip()

@@ -22,6 +22,9 @@ __pycache__/
 .venv/
 venv/
 
+# Electron Stagewright MCP local install
+.mcp/
+
 # IDE
 .vscode/
 .idea/

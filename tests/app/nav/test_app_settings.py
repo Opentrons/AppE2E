@@ -24,6 +24,17 @@ from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import AppSettingsPage
 
 
+@pytest.mark.workflow(
+    group="app_settings",
+    section="General",
+    label="General settings",
+    order=10,
+    cases=(
+        ("T69758", "Connect to a Robot via IP Address"),
+        ("T69765", "Update"),
+        ("T69766", "Software Update Alerts"),
+    ),
+)
 def test_general_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
     """T69758, T69765, T69766: General tab settings.
 
@@ -39,6 +50,13 @@ def test_general_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -
     log_done("General tab OK")
 
 
+@pytest.mark.workflow(
+    group="app_settings",
+    section="Privacy",
+    label="Privacy settings",
+    order=20,
+    cases=(("T69848", "Share App Analytics with Opentrons"),),
+)
 def test_privacy_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
     """T69848: Privacy > Share App Analytics with Opentrons."""
     log_step("Open App Settings")
@@ -50,6 +68,19 @@ def test_privacy_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -
     log_done("Privacy tab OK")
 
 
+@pytest.mark.workflow(
+    group="app_settings",
+    section="Advanced",
+    label="Advanced settings",
+    order=30,
+    cases=(
+        ("T69760", "Update Channel"),
+        ("T69761", "Additional Custom Labware Source Folder"),
+        ("T69762", "Display Unavailable Robots"),
+        ("T69763", "Clear Unavailable Robots"),
+        ("T69764", "Enable Developer Tool"),
+    ),
+)
 def test_advanced_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
     """T69760–T69764: Advanced tab settings.
 
@@ -66,6 +97,13 @@ def test_advanced_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) 
     log_done("Advanced tab OK")
 
 
+@pytest.mark.workflow(
+    group="app_settings",
+    section="Feature Flags",
+    label="Feature Flags",
+    order=40,
+    cases=(("T69757", "Feature flags"),),
+)
 def test_feature_flags_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
     """T69757: App Settings > Feature flags."""
     log_step("Open App Settings")

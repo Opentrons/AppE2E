@@ -15,19 +15,42 @@ Robot Settings test plan (``device_cards`` suite — runs before card exercises)
 11. T69756 — Robot settings > Advanced > Robot Server Reinstall
 12. Analytics — Robot and app analytics (robot settings context)
 
-Device reset + calibrate lives in ``test_device_reset_and_calibrate``.
+Device reset + calibrate lives in ``tests/app/calibration/test_calibration.py``.
 """
 
 from __future__ import annotations
 
+import pytest
+from packaging.version import Version
 from playwright.sync_api import Page
 
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import DevicesPage
 
 
-def test_robot_detail_from_devices_list(run_local_app: Page, robot_name: str) -> None:
+@pytest.mark.workflow(
+    group="devices",
+    section="Navigation",
+    label="Open robot detail from Devices",
+    order=10,
+)
+def test_robot_detail_from_devices_list(
+    run_local_app: Page,
+    robot_name: str,
+    app_version: Version,
+    device_details_tabs: bool,
+) -> None:
     """Navigate to robot detail — prerequisite for T69745–T69756 (``test_robot_settings``)."""
-    log_step(f"Open Devices and select robot '{robot_name}'")
-    DevicesPage(run_local_app, robot_name=robot_name).navigate()
+    log_step(f"Open Devices and select robot '{robot_name}' (app {app_version})")
+    devices = DevicesPage(run_local_app, robot_name=robot_name)
+    devices.navigate()
     log_done(f"Robot detail page loaded ({robot_name})")
+
+    if device_details_tabs:
+        log_step("Assert Device Details tabs (version-gated layout)")
+        devices.expect_device_details_tabs_visible()
+        log_done("Hardware / Deck Configuration / Run History tabs visible")
+    else:
+        log_step("Assert Device Details tabs absent (legacy single-page layout)")
+        devices.expect_device_details_tabs_hidden()
+        log_done("Device Details RoundTabs not present")

@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import pytest
 from playwright.sync_api import Page
 
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import LabwarePage
 
 
+@pytest.mark.workflow(
+    group="labware",
+    section="Labware",
+    label="Browse labware library",
+    order=10,
+    cases=(("T69770", "Labware landing page"),),
+)
 def test_labware_landing(run_local_app: Page) -> None:
     """
     T69770: Labware landing page and scroll to bottom while recording

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from typing import Any, Optional
 
 import httpx
@@ -14,6 +15,10 @@ from automation.app_helpers.robot_usb import find_opentrons_usb_port, http_get_o
 ROBOT_PORT = 31950
 TIMEOUT = 10.0
 DEFAULT_ROBOT_IP = "10.14.19.194"
+# Factory reset / robot restart can take a long time on Flex hardware.
+DEVICE_RESET_READY_TIMEOUT_S = 1_200.0
+DEVICE_RESET_DOWNTIME_WAIT_S = 90.0
+DEVICE_RESET_POLL_INTERVAL_S = 5.0
 
 
 def resolve_robot_ip(*, cli_ip: str | None = None) -> str:
@@ -59,6 +64,60 @@ class RobotConnection:
         if status != 200:
             raise RuntimeError(f"GET {path} failed: HTTP {status}\n{body.decode('utf-8', errors='replace')}")
         return json.loads(body.decode("utf-8"))
+
+    def _refresh_usb_port(self) -> bool:
+        """Re-discover the Opentrons USB gadget after a reboot. Return True if found."""
+        if not self.over_usb:
+            return True
+        port = find_opentrons_usb_port()
+        if port is None:
+            return False
+        self.usb_port = port
+        return True
+
+    def wait_until_healthy(
+        self,
+        *,
+        timeout_s: float = DEVICE_RESET_READY_TIMEOUT_S,
+        poll_interval_s: float = DEVICE_RESET_POLL_INTERVAL_S,
+    ) -> None:
+        """Poll ``/health`` until the robot responds."""
+        deadline = time.time() + timeout_s
+        last_error: Exception | None = None
+        while time.time() < deadline:
+            try:
+                if not self._refresh_usb_port():
+                    time.sleep(poll_interval_s)
+                    continue
+                self("/health")
+                return
+            except Exception as exc:
+                last_error = exc
+                time.sleep(poll_interval_s)
+        raise TimeoutError(
+            f"Robot /health not ready after {timeout_s:.0f}s" + (f" (last error: {last_error})" if last_error else "")
+        )
+
+    def wait_for_ready_after_reset(
+        self,
+        *,
+        timeout_s: float = DEVICE_RESET_READY_TIMEOUT_S,
+        downtime_wait_s: float = DEVICE_RESET_DOWNTIME_WAIT_S,
+        poll_interval_s: float = DEVICE_RESET_POLL_INTERVAL_S,
+    ) -> None:
+        """Wait for restart downtime (if any), then for ``/health`` to recover."""
+        deadline = time.time() + timeout_s
+        down_deadline = time.time() + downtime_wait_s
+        while time.time() < down_deadline:
+            try:
+                if not self._refresh_usb_port():
+                    break
+                self("/health")
+                time.sleep(min(poll_interval_s, 2.0))
+            except Exception:
+                break
+        remaining = max(deadline - time.time(), poll_interval_s)
+        self.wait_until_healthy(timeout_s=remaining, poll_interval_s=poll_interval_s)
 
 
 def connect_robot(default_ip: Optional[str] = None) -> RobotConnection:

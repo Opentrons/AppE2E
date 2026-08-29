@@ -47,6 +47,9 @@ def _device_cards_continuous_video(
     saved_video = screencast.stop()
     if saved_video is not None:
         request.session.device_cards_video_path = str(saved_video)
+        from automation.app_helpers.test_progress import log_path
+
+        log_path("Playwright video (device_cards suite)", saved_video, kind="video")
 
 
 def _device_cards_video_extras(video_path: str) -> list:
@@ -79,13 +82,16 @@ def device_cards(
     _device_cards_continuous_video: None,
     run_local_app: Page,
     robot_name: str,
+    device_details_tabs: bool,
 ) -> Generator[DeviceCardsPage, None, None]:
     """Shared helper: navigate once, cache module inventory for all tests in this session."""
     log_step(f"Navigating to robot detail for '{robot_name}'")
     helper = DeviceCardsPage(run_local_app)
-    DevicesPage(run_local_app, robot_name=robot_name).navigate()
+    devices = DevicesPage(run_local_app, robot_name=robot_name)
+    devices.navigate()
+    devices.open_hardware(use_tabs=device_details_tabs)
     dismiss_blocking_ui(run_local_app)
-    log_done(f"On robot detail page ({robot_name})")
+    log_done(f"On robot detail Hardware ({robot_name}, tabs={device_details_tabs})")
     log_step("Wait for module cards to finish loading")
     try:
         helper.wait_for_module_cards()

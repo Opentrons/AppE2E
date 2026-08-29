@@ -20,6 +20,7 @@ class AppSettingsPage(AppBasePage):
     """App Settings gear menu — General, Privacy, Advanced, and optional Feature Flags."""
 
     CONNECT_IP_HEADING = "Connect to a Robot via IP Address"
+    APP_SOFTWARE_VERSION = "App Software Version"
     PRIVACY_HEADING = "Share App Analytics with Opentrons"
     PRIVACY_DESCRIPTION = (
         "Help Opentrons improve its products and services by automatically "
@@ -36,6 +37,7 @@ class AppSettingsPage(AppBasePage):
     FEATURE_FLAGS_TAB = "Feature Flags"
     SETUP_CONNECTION = "Set up connection"
     ADD_IP_HOSTNAME = "Add IP Address or Hostname"
+    NAV_ARIA_LABEL = "App Settings"
 
     TABS = (
         ("General", "general"),
@@ -51,8 +53,14 @@ class AppSettingsPage(AppBasePage):
 
     @property
     def nav_link(self) -> Locator:
-        """Navbar gear icon that opens App Settings."""
-        return self.page.get_by_test_id("Navbar_settingsLink")
+        """Navbar gear control that opens App Settings.
+
+        Prefer ``aria-label="App Settings"`` (current Navbar). Fall back to the
+        legacy ``Navbar_settingsLink`` test id on older builds.
+        """
+        by_aria = self.page.get_by_role("button", name=self.NAV_ARIA_LABEL, exact=True)
+        by_test_id = self.page.get_by_test_id("Navbar_settingsLink")
+        return by_aria.or_(by_test_id).first
 
     def tab_link(self, name: str) -> Locator:
         """Return the sidebar link for an App Settings tab by visible name."""
@@ -86,9 +94,25 @@ class AppSettingsPage(AppBasePage):
             self.page.keyboard.press("Escape")
         expect(add_ip).to_be_hidden()
 
+    def read_app_software_version(self) -> str:
+        """Open App Settings → General and return the App Software Version string."""
+        self.navigate()
+        if not re.search(r"#/app-settings/general/?$", self.page.url):
+            opened = self._open_tab("General", "general")
+            if not opened:
+                # Default App Settings route may already show General without a sidebar click.
+                expect(self.page.get_by_text(self.APP_SOFTWARE_VERSION, exact=True)).to_be_visible()
+
+        heading = self.page.get_by_text(self.APP_SOFTWARE_VERSION, exact=True)
+        expect(heading).to_be_visible()
+        version_text = heading.locator("xpath=following-sibling::*[1]").inner_text().strip()
+        if not version_text:
+            raise RuntimeError("App Software Version label found but version text was empty")
+        return version_text
+
     def validate_general(self) -> None:
         """Validate General tab: connect via IP, software version, and update alerts."""
-        expect(self.page.get_by_text("App Software Version", exact=True)).to_be_visible()
+        expect(self.page.get_by_text(self.APP_SOFTWARE_VERSION, exact=True)).to_be_visible()
         update_button = self.page.get_by_role("button", name="View software update", exact=True)
         up_to_date = self.page.get_by_text("Up to date", exact=True)
         expect(update_button.or_(up_to_date)).to_be_visible()

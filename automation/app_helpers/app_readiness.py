@@ -8,7 +8,8 @@ import time
 from playwright.sync_api import Locator, Page, expect
 
 OVERLAY_SELECTOR = '[data-sentry-component="Overlay"]'
-SLIDEOUT_CLOSE_SELECTOR = '[data-testid^="Slideout_icon_close_"]'
+# Current Slideout close control (app/src/atoms/Slideout). Legacy testid kept as fallback.
+SLIDEOUT_CLOSE_SELECTOR = 'button[aria-label="exit"], [data-testid^="Slideout_icon_close_"]'
 LANGUAGE_MODAL_BUTTONS = ("Continue", "Use system language", "Don't change")
 APP_SETTINGS_URL = re.compile(r"#/app-settings")
 # Navbar gear menu debounces navigation by 300ms (see app/src/App/Navbar/index.tsx).
@@ -19,6 +20,7 @@ def dismiss_blocking_ui(page: Page, *, timeout: float = 15_000) -> None:
     """Close startup modals and slideouts so the app is ready for navigation."""
     _dismiss_language_modals(page)
     close_visible_slideouts(page)
+    click_visible_overlays(page)
     wait_for_overlays_hidden(page, timeout=timeout)
 
 

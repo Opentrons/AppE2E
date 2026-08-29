@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Opentrons E2E Workflows</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Opentrons app E2E</p>
+        <h1>Workflow test runner</h1>
+      </div>
+      <div id="connection" class="chip neutral" role="status">Connecting…</div>
+    </header>
+    <main>
+      <section class="panel catalog-panel" aria-labelledby="catalog-heading">
+        <div class="toolbar">
+          <div>
+            <h2 id="catalog-heading">Select tests</h2>
+            <p id="selection-summary">Loading catalog…</p>
+          </div>
+          <button id="refresh" class="secondary" type="button">Refresh catalog</button>
+        </div>
+        <label class="readiness">
+          <input id="flex-ready" type="checkbox" />
+          <span>
+            <strong>Flex is set up and ready</strong>
+            <small>Required to select and run calibration workflows</small>
+          </span>
+        </label>
+        <div class="select-all-bar">
+          <label>
+            <input id="select-all" type="checkbox" disabled />
+            <span>Select all available tests</span>
+          </label>
+        </div>
+        <div id="catalog-message" class="message hidden" role="status"></div>
+        <div id="catalog" aria-live="polite" aria-busy="true"></div>
+      </section>
+      <section class="panel run-panel" aria-labelledby="progress-heading">
+        <div class="toolbar">
+          <div>
+            <h2 id="progress-heading">Run progress</h2>
+            <p id="run-summary" role="status">Choose one or more tests.</p>
+          </div>
+          <div class="actions">
+            <label class="headed-control"><input id="headed" type="checkbox" checked /> Headed</label>
+            <button id="cancel" class="danger" type="button" disabled>Cancel run</button>
+            <button id="run" type="button" disabled>Run selected</button>
+          </div>
+        </div>
+        <div id="selection-covers" class="selection-covers hidden" aria-live="polite"></div>
+        <div id="current-test" class="current-test hidden"></div>
+        <div id="empty-progress" class="empty-state">
+          <strong>No run in progress</strong>
+          <span>Select tests to preview covered cases. Progress, videos, and findings appear here while running.</span>
+        </div>
+        <ol id="events" class="events"></ol>
+        <section id="source-region" class="source-region hidden" aria-labelledby="source-heading">
+          <div class="source-toolbar">
+            <div>
+              <h3 id="source-heading">Python source</h3>
+              <p id="source-path" class="source-path"></p>
+            </div>
+            <div class="source-actions">
+              <a id="source-open-editor" class="secondary source-open" href="#" hidden>Open in editor</a>
+              <button id="source-close" class="secondary" type="button">Close</button>
+            </div>
+          </div>
+          <pre id="source-code" class="source-code" tabindex="0" aria-live="polite"></pre>
+        </section>
+        <section id="artifact-region" class="artifact-region hidden" aria-labelledby="artifacts-heading">
+          <h3 id="artifacts-heading">Artifacts</h3>
+          <div id="artifacts" class="artifacts"></div>
+        </section>
+      </section>
+    </main>
+    <template id="event-template">
+      <li>
+        <span class="event-dot" aria-hidden="true"></span>
+        <div>
+          <strong></strong>
+          <small></small>
+        </div>
+      </li>
+    </template>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

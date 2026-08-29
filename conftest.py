@@ -24,11 +24,20 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def pytest_collection_modifyitems(config: Config, items: list[Item]) -> None:
-    """Wrap headed tests so failures open Playwright Inspector via page.pause()."""
+def _pause_on_failure_enabled(config: Config) -> bool:
+    """Headed CLI pauses for Inspector; ``make test-ui`` sets E2E_NO_PAUSE=1 to continue."""
+    import os
+
     from run_config import is_headed_run
 
-    if is_headed_run(config):
+    if os.environ.get("E2E_NO_PAUSE", "").strip().lower() in {"1", "true", "yes"}:
+        return False
+    return is_headed_run(config)
+
+
+def pytest_collection_modifyitems(config: Config, items: list[Item]) -> None:
+    """Wrap headed tests so failures open Playwright Inspector via page.pause()."""
+    if _pause_on_failure_enabled(config):
         for item in items:
             if isinstance(item, Function):
                 item.obj = troubleshoot_and_pause(item.obj)
@@ -37,11 +46,9 @@ def pytest_collection_modifyitems(config: Config, items: list[Item]) -> None:
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item: Item, call: pytest.CallInfo) -> Generator[None, Any, None]:
     """Same pause path as ``troubleshoot_and_pause`` when fixture setup fails."""
-    from run_config import is_headed_run
-
     outcome = yield
     report = outcome.get_result()
-    if report.failed and call.when == "setup" and is_headed_run(item.config):
+    if report.failed and call.when == "setup" and _pause_on_failure_enabled(item.config):
         error = report.longrepr if isinstance(report.longrepr, BaseException) else None
         _pause_for_debugging(item.nodeid, error, item=item)
 

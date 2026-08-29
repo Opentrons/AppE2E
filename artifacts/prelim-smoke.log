@@ -1,0 +1,122 @@
+DEFAULT_PROTOCOL_NAME: Flex Smoke Test from os.environ.get('PROTOCOL_NAME')
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-8.4.2, pluggy-1.6.0 -- /Users/alexcopperman/Downloads/Opentrons_General/opentrons-app-e2e/.venv/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.12.12', 'Platform': 'macOS-15.7.4-arm64-arm-64bit', 'Packages': {'pytest': '8.4.2', 'pluggy': '1.6.0'}, 'Plugins': {'anyio': '4.14.1', 'html': '4.1.1', 'timeout': '2.4.0', 'metadata': '3.1.1', 'base-url': '2.1.0', 'playwright': '0.7.1'}, 'Base URL': ''}
+rootdir: /Users/alexcopperman/Downloads/Opentrons_General/opentrons-app-e2e
+configfile: pytest.ini
+plugins: anyio-4.14.1, html-4.1.1, timeout-2.4.0, metadata-3.1.1, base-url-2.1.0, playwright-0.7.1
+timeout: 300.0s
+timeout method: signal
+timeout func_only: False
+collecting ... collected 8 items
+
+tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list 
+[device_cards] test_robot_detail_from_devices_list
+
+🛑 'tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/device_cards/test_cards.py::test_gripper_card 
+[device_cards] test_gripper_card
+
+🛑 'tests/app/device_cards/test_cards.py::test_gripper_card' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/device_cards/test_cards.py::test_heater_shaker_module_card 
+[device_cards] test_heater_shaker_module_card
+
+🛑 'tests/app/device_cards/test_cards.py::test_heater_shaker_module_card' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/device_cards/test_cards.py::test_left_pipette_card 
+[device_cards] test_left_pipette_card
+
+🛑 'tests/app/device_cards/test_cards.py::test_left_pipette_card' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/device_cards/test_cards.py::test_robot_lights 
+[device_cards] test_robot_lights
+
+🛑 'tests/app/device_cards/test_cards.py::test_robot_lights' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/nav/test_labware.py::test_labware_landing 
+[nav] test_labware_landing
+
+🛑 'tests/app/nav/test_labware.py::test_labware_landing' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/nav/test_protocols.py::test_protocol_opens_from_landing 
+[nav] test_protocol_opens_from_landing
+
+🛑 'tests/app/nav/test_protocols.py::test_protocol_opens_from_landing' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+tests/app/nav/test_app_settings.py::test_general_tab 
+[nav] test_general_tab
+
+🛑 'tests/app/nav/test_app_settings.py::test_general_tab' failed
+Pausing execution for debugging...
+⚠️  Could not find a Playwright page to pause.
+    You can still debug the console state.
+ERROR
+
+==================================== ERRORS ====================================
+____________ ERROR at setup of test_robot_detail_from_devices_list _____________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+_____________________ ERROR at setup of test_gripper_card ______________________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+_______________ ERROR at setup of test_heater_shaker_module_card _______________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+___________________ ERROR at setup of test_left_pipette_card ___________________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+_____________________ ERROR at setup of test_robot_lights ______________________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+____________________ ERROR at setup of test_labware_landing ____________________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+______________ ERROR at setup of test_protocol_opens_from_landing ______________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+______________________ ERROR at setup of test_general_tab ______________________
+E   httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+    For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+- Generated html report: file:///Users/alexcopperman/Downloads/Opentrons_General/opentrons-app-e2e/test-results/report.html -
+=========================== short test summary info ============================
+ERROR tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/device_cards/test_cards.py::test_gripper_card - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/device_cards/test_cards.py::test_heater_shaker_module_card - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/device_cards/test_cards.py::test_left_pipette_card - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/device_cards/test_cards.py::test_robot_lights - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/nav/test_labware.py::test_labware_landing - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/nav/test_protocols.py::test_protocol_opens_from_landing - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+ERROR tests/app/nav/test_app_settings.py::test_general_tab - httpx.HTTPStatusError: Client error '403 Forbidden' for url 'http://10.14.19.194:31950/health'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403
+============================== 8 errors in 0.17s ===============================

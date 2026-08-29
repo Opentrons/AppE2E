@@ -12,6 +12,7 @@ from automation.app_helpers.list_scroll import scroll_until_visible
 from automation.app_helpers.page_helpers import require_helper
 from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
+from automation.app_pages.base_app.protocol_overflow_menu import ProtocolOverflowMenu
 
 
 class ProtocolsPage(AppBasePage):
@@ -87,6 +88,24 @@ class ProtocolsPage(AppBasePage):
         expect(start_setup).to_be_visible()
         start_setup.click()
 
+    def choose_overflow_action(self, protocol_name: str, action: str) -> None:
+        """Open a protocol card overflow menu and choose a named action."""
+        dismiss_blocking_ui(self.page)
+        self.navigate_landing()
+        title = self._find_protocol_card(protocol_name)
+        expect(title).to_be_visible()
+        container = self.protocol_card_container(protocol_name)
+        overflow = container.get_by_test_id(self.OVERFLOW_BTN)
+        expect(overflow).to_be_visible()
+        overflow.click()
+        try:
+            test_id = ProtocolOverflowMenu.ACTION_IDS[action]
+        except KeyError as error:
+            raise ValueError(f"Unknown protocol action: {action}") from error
+        item = self.page.get_by_test_id(test_id)
+        expect(item).to_be_visible()
+        item.click()
+
     def tab_button(self, name: str) -> Locator:
         """Return the detail-tab button locator for ``name``."""
         return self.page.get_by_role("button", name=name, exact=True)
@@ -105,8 +124,12 @@ class ProtocolsPage(AppBasePage):
             expect(tab_button).to_be_visible()
 
     def capture_all_tabs(self) -> None:
-        """Screenshot each protocol detail tab."""
+        """Click each present protocol detail tab and screenshot it."""
         shots = require_helper(self.shots, "ScreenshotHelper", owner="ProtocolsPage", method="capture_all_tabs")
         for tab in self.PROTOCOL_TABS:
+            tab_button = self.tab_button(tab)
+            if tab_button.count() == 0:
+                continue
             self.tab(tab)
+            expect(tab_button).to_be_visible()
             shots.capture("protocols", tab.lower())

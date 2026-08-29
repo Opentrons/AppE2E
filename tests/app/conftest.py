@@ -9,12 +9,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from packaging.version import Version
 from playwright.sync_api import Browser, Page, Playwright
 from pytest_html import extras as html_extras
 
 import bootstrap  # noqa: F401
 import open_app
+from automation.app_helpers.app_version import has_device_details_tabs, parse_app_version
 from automation.app_helpers.dev_robot_setup import ensure_localhost_robot_discovered, wait_for_robot_server
+from automation.app_helpers.left_nav import navigate_to
 from automation.app_helpers.reporting import (
     capture_failure_screenshot,
     ensure_test_results_dir,
@@ -30,7 +33,8 @@ from automation.app_helpers.robot_profiles import (
 )
 from automation.app_helpers.robot_usb import find_opentrons_usb_port
 from automation.app_helpers.screenshot_helper import ScreenshotHelper
-from automation.app_helpers.test_progress import log_step
+from automation.app_helpers.test_progress import log_done, log_step
+from automation.app_pages import AppSettingsPage, DevicesPage
 from run_config import is_headed_run
 
 DEFAULT_PROTOCOL_NAME = os.environ.get(
@@ -102,6 +106,7 @@ def _connect_robot_for_tests(
     connection = RobotConnection(ip=ip)
     connection("/health")
     return connection
+
 
 @pytest.fixture(scope="session")
 def robot_profile(request: pytest.FixtureRequest) -> RobotProfile | None:
@@ -220,6 +225,27 @@ def robot_name(request: pytest.FixtureRequest, robot_profile: RobotProfile | Non
     return name
 
 
+@pytest.fixture(scope="session")
+def app_version(run_local_app: Page) -> Version:
+    """Desktop app software version from App Settings → General (session-scoped)."""
+    settings = AppSettingsPage(run_local_app)
+    log_step("Read App Software Version from App Settings")
+    raw = settings.read_app_software_version()
+    version = parse_app_version(raw)
+    log_done(f"App software version: {raw!r} → {version}")
+    # Leave later fixtures on Devices landing rather than stuck in Settings.
+    navigate_to(run_local_app, "Devices", DevicesPage.DEVICES_LANDING_URL)
+    return version
+
+
+@pytest.fixture(scope="session")
+def device_details_tabs(app_version: Version) -> bool:
+    """True when Device Details uses Hardware / Deck Configuration / Run History tabs."""
+    enabled = has_device_details_tabs(app_version)
+    log_step(f"Device Details tabs layout: {enabled} (app {app_version})")
+    return enabled
+
+
 @pytest.fixture(autouse=True)
 def _headed_bring_app_to_front(request: pytest.FixtureRequest, run_local_app: Page) -> Generator[None, None, None]:
     """Bring the Electron window to the front before each test in headed mode."""
@@ -248,10 +274,14 @@ def _record_test_artifacts(request: pytest.FixtureRequest, run_local_app: Page) 
     )
     yield
     artifacts = stop_test_recording(run_local_app.context, recording)
+    from automation.app_helpers.test_progress import log_path
+
     if artifacts.trace_path is not None:
         request.node.user_properties.append(("trace_path", str(artifacts.trace_path)))
+        log_path("Playwright trace", artifacts.trace_path, kind="trace")
     if artifacts.video_path is not None:
         request.node.user_properties.append(("video_path", str(artifacts.video_path)))
+        log_path("Playwright video", artifacts.video_path, kind="video")
 
 
 @pytest.fixture(scope="session")
@@ -307,15 +337,52 @@ def pytest_configure(config: pytest.Config) -> None:
     ensure_test_results_dir()
 
 
-# Full-suite order: device_cards (devices nav, robot settings, then cards) → nav (labware, protocols, settings).
+# Full-suite order for ``make test-app``. Run setup remains last.
 _MODULE_ORDER = (
     "device_cards/test_devices_nav.py",
     "device_cards/test_robot_settings.py",
+    "device_cards/test_robot_settings_file_manager.py",
     "device_cards/test_cards.py",
+    "device_cards/test_deck_configuration.py",
+    "device_cards/test_run_history.py",
     "nav/test_labware.py",
     "nav/test_protocols.py",
+    "nav/test_protocol_actions.py",
     "nav/test_app_settings.py",
+    "nav/test_app_settings_placeholders.py",
+    "calibration/test_calibration.py",
+    "nav/test_protocol_run_tabs.py",
+    "nav/test_run_setup.py",
 )
+
+# Within calibration: reset first, then status checks, then per-instrument wizards.
+_CALIBRATION_TEST_ORDER = (
+    "test_device_reset",
+    "test_calibration_flow",
+    "test_calibration_overflow_menu",
+    "test_96_channel_calibration",
+    "test_heater_shaker_calibration",
+    "test_temperature_module_calibration",
+    "test_thermocycler_calibration",
+)
+
+# Within robot settings: T69745–T69756 plan order (not alphabetical nodeid).
+_ROBOT_SETTINGS_TEST_ORDER = (
+    "test_calibration_about_calibration",
+    "test_calibration_pipette_calibrations",
+    "test_networking",
+    "test_privacy",
+    "test_advanced_robot_name",
+    "test_advanced_robot_server_version",
+    "test_advanced_pause_on_door_open",
+    "test_home_gantry_from_overview_overflow",
+    "test_advanced_jupyter_notebook",
+    "test_advanced_update_robot_software",
+    "test_advanced_robot_server_reinstall",
+    "test_analytics",
+)
+
+_ABR_SUITE_DIR = "abr_orchestration"
 
 
 def _is_app_test(item: pytest.Item) -> bool:
@@ -324,21 +391,53 @@ def _is_app_test(item: pytest.Item) -> bool:
     return "tests" in parts and "app" in parts and parts.index("tests") + 1 == parts.index("app")
 
 
+def _is_abr_test(item: pytest.Item) -> bool:
+    """Return True when the test lives under ``tests/app/abr_orchestration/``."""
+    return _ABR_SUITE_DIR in item.path.parts
+
+
+def _module_relpath(item: pytest.Item) -> str:
+    """Return ``<suite>/<file>.py`` for sorting (e.g. ``calibration/test_calibration.py``)."""
+    return "/".join(item.path.parts[-2:])
+
+
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Run device_cards before nav, with modules in workflow order within the app suite."""
-    rank = {path: index for index, path in enumerate(_MODULE_ORDER)}
+    """Order the app suite and keep ABR out of mixed ``tests/app/`` runs."""
+    del session
 
-    def sort_key(item: pytest.Item) -> tuple[int, str]:
-        rel = "/".join(item.path.parts[-2:])
-        return (rank.get(rel, len(_MODULE_ORDER)), item.nodeid)
-
-    app_indices = [index for index, item in enumerate(items) if _is_app_test(item)]
-    if not app_indices:
+    app_items = [item for item in items if _is_app_test(item)]
+    if not app_items:
         return
 
-    app_items = [items[index] for index in app_indices]
-    app_items.sort(key=sort_key)
-    for index, item in zip(app_indices, app_items, strict=True):
+    abr_items = [item for item in app_items if _is_abr_test(item)]
+    non_abr_app_items = [item for item in app_items if not _is_abr_test(item)]
+    # Deselect ABR when other app suites are also collected (full ``test-app``).
+    # Dedicated ``make run_abr_2_and_4`` only collects ABR, so those stay.
+    if abr_items and non_abr_app_items:
+        config.hook.pytest_deselected(items=abr_items)
+        items[:] = [item for item in items if not _is_abr_test(item)]
+        app_items = non_abr_app_items
+
+    module_rank = {path: index for index, path in enumerate(_MODULE_ORDER)}
+    calibration_rank = {name: index for index, name in enumerate(_CALIBRATION_TEST_ORDER)}
+    robot_settings_rank = {name: index for index, name in enumerate(_ROBOT_SETTINGS_TEST_ORDER)}
+    unknown_module = len(_MODULE_ORDER)
+    unknown_calibration = len(_CALIBRATION_TEST_ORDER)
+    unknown_robot_settings = len(_ROBOT_SETTINGS_TEST_ORDER)
+
+    def sort_key(item: pytest.Item) -> tuple[int, int, str]:
+        module = _module_relpath(item)
+        if module == "calibration/test_calibration.py":
+            test_rank = calibration_rank.get(item.name, unknown_calibration)
+        elif module == "device_cards/test_robot_settings.py":
+            test_rank = robot_settings_rank.get(item.name, unknown_robot_settings)
+        else:
+            test_rank = 0
+        return (module_rank.get(module, unknown_module), test_rank, item.nodeid)
+
+    app_indices = [index for index, item in enumerate(items) if _is_app_test(item)]
+    ordered = sorted((items[index] for index in app_indices), key=sort_key)
+    for index, item in zip(app_indices, ordered, strict=True):
         items[index] = item
 
 

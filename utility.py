@@ -54,6 +54,16 @@ def _pause_for_debugging(
     **kwargs: object,
 ) -> None:
     """Print failure context and open Playwright Inspector (shared by decorator + setup hook)."""
+    import os
+
+    if os.environ.get("E2E_NO_PAUSE", "").strip().lower() in {"1", "true", "yes"}:
+        if error is not None:
+            print(f"\n🛑 '{where}' failed due to: {type(error).__name__} - {error}")
+        else:
+            print(f"\n🛑 '{where}' failed")
+        print("Continuing to the next test (E2E_NO_PAUSE=1)...")
+        return
+
     if error is not None:
         print(f"\n🛑 '{where}' failed due to: {type(error).__name__} - {error}")
     else:

@@ -13,13 +13,11 @@ from playwright.sync_api import Locator, Page, expect
 from automation.app_helpers.app_readiness import click_visible_overlays, close_visible_slideouts
 from automation.app_helpers.locator_helpers import menu_item
 from automation.app_pages.base_app.app_base_page import AppBasePage
+from automation.app_pages.components import OverflowMenu, Slideout
 
 TC_INPUT = re.compile(r"^ThermocyclerSlideout_input_field_")
-TC_SUBMIT = re.compile(r"^ThermocyclerSlideout_btn_")
 TEMP_INPUT = re.compile(r"^TemperatureSlideout_input_field_")
-TEMP_SUBMIT = re.compile(r"^TemperatureSlideout_btn_")
 HS_INPUT = re.compile(r"^HeaterShakerSlideout_input_field_")
-HS_SUBMIT = re.compile(r"^HeaterShakerSlideout_btn_")
 TEST_SHAKE_INPUT = "TestShakeSlideout_shake_input"
 TEST_SHAKE_START = "TestShakeSlideout_start_btn"
 TEST_SHAKE_LATCH_STATUS = "TestShake_Slideout_latch_status"
@@ -48,7 +46,8 @@ class ModuleCardSpec:
     model: str
     prefix_env: str
     default_prefix: str
-    exercise: str | None = None
+    slideout_name: str | None = None
+    fallback_prefixes: tuple[str, ...] = ()
 
 
 THERMOCYCLER = ModuleCardSpec(
@@ -56,14 +55,14 @@ THERMOCYCLER = ModuleCardSpec(
     "thermocyclerModuleV2",
     "THERMOCYCLER_PREFIX",
     "TC2",
-    "exercise_thermocycler_card",
+    "Thermocycler",
 )
 HEATER_SHAKER = ModuleCardSpec(
     "Heater-Shaker",
     "heaterShakerModuleV1",
     "HEATER_SHAKER_PREFIX",
     "HSV0",
-    "exercise_heater_shaker_card",
+    "HeaterShaker",
 )
 HS_LATCH_MENU = re.compile(rf"^hs_labware_latch_{re.escape(HEATER_SHAKER.model)}$")
 HS_TEST_SHAKE_MENU = re.compile(rf"^hs_test_shake_btn_{re.escape(HEATER_SHAKER.model)}$")
@@ -72,16 +71,183 @@ TEMPERATURE = ModuleCardSpec(
     "temperatureModuleV2",
     "TEMPERATURE_MODULE_PREFIX",
     "TDV2",
-    "exercise_temperature_module_card",
+    "Temperature",
 )
-PLATE_READER = ModuleCardSpec("Plate reader", "absorbanceReaderV1", "PLATE_READER_PREFIX", "OPTMAA")
+# BYOMAA = DVT serials; OPTMAA = older plate-reader serials.
+PLATE_READER = ModuleCardSpec(
+    "Plate reader",
+    "absorbanceReaderV1",
+    "PLATE_READER_PREFIX",
+    "BYOMAA",
+    fallback_prefixes=("OPTMAA",),
+)
+FLEX_STACKER = ModuleCardSpec(
+    "Flex Stacker",
+    "flexStackerModuleV1",
+    "FLEX_STACKER_PREFIX",
+    "FS",
+)
 
 MODULE_CARD_SPECS: tuple[ModuleCardSpec, ...] = (
     THERMOCYCLER,
     HEATER_SHAKER,
     TEMPERATURE,
     PLATE_READER,
+    FLEX_STACKER,
 )
+
+
+class ModuleCard:
+    """Polymorphic driver for one discovered module card."""
+
+    def __init__(self, page_object: DeviceCardsPage, spec: ModuleCardSpec, serial_prefix: str) -> None:
+        self.page_object = page_object
+        self.spec = spec
+        self.serial_prefix = serial_prefix
+
+    def read_about(self) -> tuple[str, str | None]:
+        return self.page_object.read_about_module(self.serial_prefix, self.spec.model)
+
+    @property
+    def overflow(self) -> OverflowMenu:
+        """Return the card-scoped overflow control."""
+        return OverflowMenu(
+            self.page_object._module_card(self.serial_prefix).first,
+            self.page_object._module_overflow_button(self.serial_prefix),
+            menu=self.page_object._overflow_menu_scope(self.serial_prefix),
+        )
+
+    @property
+    def slideout(self) -> Slideout:
+        """Return this module's conventional temperature slideout."""
+        if self.spec.slideout_name is None:
+            raise RuntimeError(f"{self.spec.label} has no temperature slideout")
+        return Slideout(self.page_object.page, self.spec.slideout_name)
+
+    def exercise(self) -> None:
+        """Inventory-only default for modules without safe controls."""
+
+
+class ThermocyclerCard(ModuleCard):
+    def close_lid(self) -> None:
+        if not self.page_object._open_module_overflow(self.serial_prefix):
+            return
+        close_lid = self.page_object._module_menu(self.serial_prefix).get_by_role(
+            "button", name="Close lid", exact=True
+        )
+        if close_lid.count() > 0 and close_lid.is_visible():
+            close_lid.click()
+            print("  Close lid")
+            self.page_object._dismiss_blocking_overlays()
+
+    def _set_temperature(self, value: str, action: str, deactivate_action: str) -> bool:
+        if not self.page_object._open_module_temp_slideout(
+            self.serial_prefix,
+            TC_INPUT,
+            action,
+            deactivate_action,
+        ):
+            return False
+        self.slideout.fill(value)
+        self.slideout.confirm()
+        self.page_object._dismiss_blocking_overlays()
+        return True
+
+    def set_lid_temperature(self, celsius: str = "80") -> bool:
+        return self._set_temperature(celsius, "Set lid temperature", "Deactivate lid")
+
+    def set_block_temperature(self, celsius: str = "60") -> bool:
+        return self._set_temperature(celsius, "Set block temperature", "Deactivate block")
+
+    def exercise(self) -> None:
+        if not self.page_object._begin_module_exercise(self.spec, self.serial_prefix):
+            return
+        self.close_lid()
+        if not self.set_lid_temperature():
+            print("  Skipping lid temperature — menu item not found.")
+            self.page_object._dismiss_blocking_overlays()
+            return
+        print("  set lid temperature to 80")
+        if not self.set_block_temperature():
+            print("  Skipping block temperature — menu item not found.")
+            self.page_object._dismiss_blocking_overlays()
+            return
+        print("  set block temperature to 60")
+
+
+class HeaterShakerCard(ModuleCard):
+    def set_temperature(self, celsius: str = "40") -> bool:
+        if not self.page_object._open_module_temp_slideout(
+            self.serial_prefix,
+            HS_INPUT,
+            "Set module temperature",
+            "Deactivate heater",
+        ):
+            return False
+        self.slideout.fill(celsius)
+        self.slideout.confirm()
+        self.page_object._dismiss_blocking_overlays()
+        return True
+
+    def test_shake(self) -> None:
+        self.page_object._exercise_heater_shaker_test_shake(self.serial_prefix)
+
+    def toggle_latch(self) -> None:
+        self.page_object._exercise_heater_shaker_latch(self.serial_prefix)
+
+    def exercise(self) -> None:
+        if not self.page_object._begin_module_exercise(self.spec, self.serial_prefix):
+            return
+        self.page_object._ensure_heater_shaker_idle(self.serial_prefix)
+        if not self.set_temperature():
+            print("  Skipping module temperature — menu item not found.")
+            self.page_object._dismiss_blocking_overlays()
+            return
+        print("  set temperature to 40")
+        self.test_shake()
+        self.page_object._ensure_heater_shaker_idle(self.serial_prefix)
+        self.toggle_latch()
+
+
+class TemperatureModuleCard(ModuleCard):
+    def set_temperature(self, celsius: str = "4") -> bool:
+        if not self.page_object._open_module_temp_slideout(
+            self.serial_prefix,
+            TEMP_INPUT,
+            "Set module temperature",
+            "Deactivate module",
+        ):
+            return False
+        self.slideout.fill(celsius)
+        self.slideout.confirm()
+        self.page_object._dismiss_blocking_overlays()
+        return True
+
+    def exercise(self) -> None:
+        if not self.page_object._begin_module_exercise(self.spec, self.serial_prefix):
+            return
+        if not self.set_temperature():
+            print("  Skipping module temperature — menu item not found.")
+            self.page_object._dismiss_blocking_overlays()
+            return
+        print("  set module temperature to 4")
+
+
+class PlateReaderCard(ModuleCard):
+    """Plate Reader inventory driver."""
+
+
+class FlexStackerCard(ModuleCard):
+    """Flex Stacker inventory driver."""
+
+
+MODULE_CARD_DRIVERS: dict[str, type[ModuleCard]] = {
+    THERMOCYCLER.model: ThermocyclerCard,
+    HEATER_SHAKER.model: HeaterShakerCard,
+    TEMPERATURE.model: TemperatureModuleCard,
+    PLATE_READER.model: PlateReaderCard,
+    FLEX_STACKER.model: FlexStackerCard,
+}
 
 
 class DeviceCardsPage(AppBasePage):
@@ -94,8 +260,24 @@ class DeviceCardsPage(AppBasePage):
 
     @staticmethod
     def module_prefix(spec: ModuleCardSpec) -> str:
-        """Return the configured serial prefix for a module card spec."""
+        """Return the primary serial prefix (env override or default)."""
         return os.environ.get(spec.prefix_env, spec.default_prefix)
+
+    @staticmethod
+    def module_prefix_candidates(spec: ModuleCardSpec) -> tuple[str, ...]:
+        """Return serial prefixes to try: env override, else default then fallbacks."""
+        env = os.environ.get(spec.prefix_env)
+        if env:
+            return (env,)
+        return (spec.default_prefix, *spec.fallback_prefixes)
+
+    def resolve_module_prefix(self, spec: ModuleCardSpec, override: str | None = None) -> str:
+        """Pick the first serial prefix that matches a visible module card."""
+        candidates = (override,) if override else self.module_prefix_candidates(spec)
+        for prefix in candidates:
+            if prefix and self.has_module_card(prefix):
+                return prefix
+        return candidates[0] if candidates and candidates[0] else spec.default_prefix
 
     def _dismiss_blocking_overlays(self) -> None:
         """Close slideouts and overflow-menu overlays that block later card clicks."""
@@ -143,9 +325,10 @@ class DeviceCardsPage(AppBasePage):
         inventory: ModuleInventory = {}
         print("\n--- Module inventory ---")
         for spec in MODULE_CARD_SPECS:
-            prefix = overrides.get(spec.model) or self.module_prefix(spec)
+            prefix = self.resolve_module_prefix(spec, overrides.get(spec.model))
             if not self.has_module_card(prefix):
-                print(f"  {spec.label}: not found (prefix '{prefix}')")
+                tried = ", ".join(self.module_prefix_candidates(spec))
+                print(f"  {spec.label}: not found (tried '{tried}')")
                 continue
             serial, firmware = self.read_about_module(prefix, spec.model)
             if not serial:
@@ -577,12 +760,6 @@ class DeviceCardsPage(AppBasePage):
         print(f"  {latch_label.lower()}")
         self._dismiss_blocking_overlays()
 
-    def _fill_number_in_test_id(self, test_id_pattern: re.Pattern[str], value: str) -> None:
-        """Fill a numeric input located by a test-id pattern."""
-        field = self.page.get_by_test_id(test_id_pattern).first
-        expect(field).to_be_visible()
-        field.locator("input").fill(value)
-
     def _fill_input_by_test_id(
         self,
         test_id: str,
@@ -696,110 +873,29 @@ class DeviceCardsPage(AppBasePage):
         self._close_pipette_or_gripper_about()
 
     def exercise_thermocycler_card(self, prefix: str | None = None) -> None:
-        """Exercise thermocycler lid and block temperature controls."""
+        """Exercise thermocycler controls through its typed card driver."""
         prefix = prefix or self.module_prefix(THERMOCYCLER)
-        if not self._begin_module_exercise(THERMOCYCLER, prefix):
-            return
-
-        if not self._open_module_overflow(prefix):
-            return
-
-        close_lid = self._module_menu(prefix).get_by_role("button", name="Close lid", exact=True)
-        if close_lid.count() > 0 and close_lid.is_visible():
-            close_lid.click()
-            print("  Close lid")
-            self._dismiss_blocking_overlays()
-
-        if not self._open_module_overflow(prefix):
-            return
-
-        if not self._open_module_temp_slideout(
-            prefix,
-            TC_INPUT,
-            "Set lid temperature",
-            "Deactivate lid",
-        ):
-            print("  Skipping lid temperature — menu item not found.")
-            self._dismiss_blocking_overlays()
-            return
-        self._fill_number_in_test_id(TC_INPUT, "80")
-        self.page.get_by_test_id(TC_SUBMIT).first.click()
-        print("  set lid temperature to 80")
-        self._dismiss_blocking_overlays()
-
-        if not self._open_module_overflow(prefix):
-            return
-
-        if not self._open_module_temp_slideout(
-            prefix,
-            TC_INPUT,
-            "Set block temperature",
-            "Deactivate block",
-        ):
-            print("  Skipping block temperature — menu item not found.")
-            self._dismiss_blocking_overlays()
-            return
-        self._fill_number_in_test_id(TC_INPUT, "60")
-        self.page.get_by_test_id(TC_SUBMIT).first.click()
-        print("  set block temperature to 60")
-        self._dismiss_blocking_overlays()
+        ThermocyclerCard(self, THERMOCYCLER, prefix).exercise()
 
     def exercise_heater_shaker_card(self, prefix: str | None = None) -> None:
-        """Exercise heater-shaker temperature, test-shake, and latch controls."""
+        """Exercise heater-shaker controls through its typed card driver."""
         prefix = prefix or self.module_prefix(HEATER_SHAKER)
-        if not self._begin_module_exercise(HEATER_SHAKER, prefix):
-            return
-
-        self._ensure_heater_shaker_idle(prefix)
-
-        if not self._open_module_temp_slideout(
-            prefix,
-            HS_INPUT,
-            "Set module temperature",
-            "Deactivate heater",
-        ):
-            print("  Skipping module temperature — menu item not found.")
-            self._dismiss_blocking_overlays()
-            return
-        self._fill_number_in_test_id(HS_INPUT, "40")
-        self.page.get_by_test_id(HS_SUBMIT).first.click()
-        print("  set temperature to 40")
-        self._dismiss_blocking_overlays()
-
-        # Test shake requires a closed latch; close it in-slideout if needed.
-        self._exercise_heater_shaker_test_shake(prefix)
-        self._ensure_heater_shaker_idle(prefix)
-        # Exercise overflow-menu latch toggle separately (typically opens latch).
-        self._exercise_heater_shaker_latch(prefix)
+        HeaterShakerCard(self, HEATER_SHAKER, prefix).exercise()
 
     def exercise_temperature_module_card(self, prefix: str | None = None) -> None:
-        """Set temperature module target to 4 °C via the overflow menu."""
+        """Exercise temperature controls through its typed card driver."""
         prefix = prefix or self.module_prefix(TEMPERATURE)
-        if not self._begin_module_exercise(TEMPERATURE, prefix):
-            return
-
-        if not self._open_module_temp_slideout(
-            prefix,
-            TEMP_INPUT,
-            "Set module temperature",
-            "Deactivate module",
-        ):
-            print("  Skipping module temperature — menu item not found.")
-            self._dismiss_blocking_overlays()
-            return
-        self._fill_number_in_test_id(TEMP_INPUT, "4")
-        self.page.get_by_test_id(TEMP_SUBMIT).first.click()
-        print("  set module temperature to 4")
-        self._dismiss_blocking_overlays()
+        TemperatureModuleCard(self, TEMPERATURE, prefix).exercise()
 
     def exercise_lights(self) -> None:
         """Toggle the robot lights switch on the overview page."""
         print("\n--- Robot lights ---")
         self._dismiss_blocking_overlays()
 
-        toggle = self.page.locator("#RobotOverview_lightsToggle")
+        # Current UI: role=switch aria-label="Lights". Legacy id kept as fallback.
+        toggle = self.page.get_by_role("switch", name="Lights")
         if toggle.count() == 0:
-            toggle = self.page.get_by_role("switch", name="Lights")
+            toggle = self.page.locator("#RobotOverview_lightsToggle")
         if toggle.count() == 0:
             print("  Skipping lights — toggle not found.")
             return
@@ -808,6 +904,22 @@ class DeviceCardsPage(AppBasePage):
         toggle.click()
         now_on = toggle.get_attribute("aria-checked") == "true"
         print(f"  Lights toggled: {'on' if was_on else 'off'} -> {'on' if now_on else 'off'}")
+
+    def cards(
+        self,
+        *,
+        prefix_overrides: dict[str, str | None] | None = None,
+    ) -> list[ModuleCard]:
+        """Return typed drivers for every configured, enabled module card."""
+        overrides = prefix_overrides or {}
+        cards: list[ModuleCard] = []
+        for spec in MODULE_CARD_SPECS:
+            prefix = self.resolve_module_prefix(spec, overrides.get(spec.model))
+            if not self.has_module_card(prefix):
+                continue
+            driver = MODULE_CARD_DRIVERS[spec.model]
+            cards.append(driver(self, spec, prefix))
+        return cards
 
     def exercise_all(
         self,
@@ -835,14 +947,14 @@ class DeviceCardsPage(AppBasePage):
             self.exercise_pipette_card(mount="right")
         self.exercise_gripper_card()
 
+        discovered = {card.spec.model: card for card in self.cards(prefix_overrides=overrides)}
         for spec in MODULE_CARD_SPECS:
-            prefix = overrides.get(spec.model) or self.module_prefix(spec)
-            if not self.has_module_card(prefix):
-                print(f"\n--- {spec.label} (prefix: {prefix}) ---\n  Skipping — card not found or disabled.")
+            card = discovered.get(spec.model)
+            if card is None:
+                tried = ", ".join(self.module_prefix_candidates(spec))
+                print(f"\n--- {spec.label} (tried: {tried}) ---\n  Skipping — card not found or disabled.")
                 continue
-            if spec.exercise is None:
-                continue
-            getattr(self, spec.exercise)(prefix=prefix)
+            card.exercise()
 
         self.exercise_lights()
 
