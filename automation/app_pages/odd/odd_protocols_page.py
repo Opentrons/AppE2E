@@ -146,9 +146,7 @@ class OddProtocolsPage(AppBasePage):
     def back_to_protocols(self) -> None:
         """Return to the Protocols list via the top nav."""
         self.open()
-        expect(self.protocol_cards.first.or_(self.page.get_by_text("Pinned Protocols"))).to_be_visible(
-            timeout=15_000
-        )
+        expect(self.protocol_cards.first.or_(self.page.get_by_text("Pinned Protocols"))).to_be_visible(timeout=15_000)
 
     def delete_open_protocol(self) -> None:
         """Delete the protocol open on Protocol Details and confirm."""

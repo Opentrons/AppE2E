@@ -71,9 +71,7 @@ def inject_robot_profile_or_name_arg(args: list[str]) -> None:
         if skip_next:
             skip_next = False
             continue
-        if token in _VALUE_FLAGS or token.startswith(
-            ("--robot-name=", "--robot-profile=", "--robot-ip=")
-        ):
+        if token in _VALUE_FLAGS or token.startswith(("--robot-name=", "--robot-profile=", "--robot-ip=")):
             if "=" not in token and token in _VALUE_FLAGS:
                 skip_next = True
             continue

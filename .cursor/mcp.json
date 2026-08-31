@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "electron-stagewright": {
+      "command": "/Users/alexcopperman/.nvs/node/24.20.0/arm64/bin/node",
+      "args": [
+        "/Users/alexcopperman/Downloads/Opentrons_General/opentrons-app-e2e/.mcp/electron-stagewright/node_modules/@electron-stagewright/core/dist/cli.js",
+        "--tool-profile",
+        "debug",
+        "--screenshot-dir",
+        "/Users/alexcopperman/Downloads/Opentrons_General/opentrons-app-e2e/artifacts/mcp-screenshots"
+      ]
+    }
+  }
+}

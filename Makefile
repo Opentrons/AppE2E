@@ -13,7 +13,9 @@ PYTEST_HEADED := $(if $(HEADED),HEADED=1,)
 	configure-robot check-robot \
 	_pytest-app _app-report-banner \
 	test-app test-app-headed test-app-nav test-app-nav-headed \
-	test-app-device-cards test-app-device-cards-headed run_abr_2_and_4 \
+	test-app-device-cards test-app-device-cards-headed \
+	test-app-calibration test-app-calibration-headed run_abr_2_and_4 \
+	test-ui \
 	test-odd test-odd-headed \
 	troubleshoot
 
@@ -60,6 +62,9 @@ test-app:
 test-app-headed:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/app/ HEADED_ENV="HEADED=1"
 
+test-ui:
+	uv run python -m automation.ui_runner.server
+
 test-app-nav:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/app/nav/ HEADED_ENV="$(PYTEST_HEADED)"
 
@@ -72,6 +77,19 @@ test-app-device-cards:
 test-app-device-cards-headed:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/app/device_cards/ HEADED_ENV="HEADED=1"
 
+# Interactive Flex setup prompt — keep -s so stdin/stdout stay attached.
+test-app-calibration:
+	@$(MAKE) --no-print-directory _pytest-app \
+		TEST_PATH=tests/app/calibration/ \
+		HEADED_ENV="$(PYTEST_HEADED)" \
+		PYTEST_ARGS="-s $(PYTEST_ARGS)"
+
+test-app-calibration-headed:
+	@$(MAKE) --no-print-directory _pytest-app \
+		TEST_PATH=tests/app/calibration/ \
+		HEADED_ENV="HEADED=1" \
+		PYTEST_ARGS="-s $(PYTEST_ARGS)"
+
 # Flex ODD (remote CDP on ROBOT_IP:9223 — enable Developer Tools on the touchscreen first)
 # Examples:
 #   make test-odd-headed ROBOT_IP=10.14.19.200
@@ -82,6 +100,7 @@ test-odd:
 test-odd-headed:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/odd/ HEADED_ENV="HEADED=1"
 
+# ABR is excluded from ``test-app`` / ``test-app-headed`` (see tests/app/conftest.py).
 run_abr_2_and_4:
 	@$(MAKE) --no-print-directory _pytest-app \
 		TEST_PATH=tests/app/abr_orchestration/test_abr_2_and_4.py HEADED_ENV="HEADED=1"

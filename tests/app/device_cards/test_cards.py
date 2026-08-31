@@ -12,7 +12,16 @@ import pytest
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import HEATER_SHAKER, TEMPERATURE, THERMOCYCLER, DeviceCardsPage
 
+ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list"
 
+
+@pytest.mark.workflow(
+    group="devices",
+    section="Hardware cards",
+    label="Left pipette card",
+    order=30,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_left_pipette_card(device_cards: DeviceCardsPage) -> None:
     """Exercise the left or combined left+right pipette card when present.
 
@@ -34,6 +43,13 @@ def test_left_pipette_card(device_cards: DeviceCardsPage) -> None:
     log_done("Left pipette card OK")
 
 
+@pytest.mark.workflow(
+    group="devices",
+    section="Hardware cards",
+    label="Right pipette card",
+    order=40,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_right_pipette_card(device_cards: DeviceCardsPage) -> None:
     """Exercise the right pipette card when a separate right mount exists.
 
@@ -52,6 +68,13 @@ def test_right_pipette_card(device_cards: DeviceCardsPage) -> None:
     log_done("Right pipette card OK")
 
 
+@pytest.mark.workflow(
+    group="devices",
+    section="Hardware cards",
+    label="Gripper card",
+    order=50,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_gripper_card(device_cards: DeviceCardsPage) -> None:
     """Exercise the Flex gripper card when the extension mount is present.
 
@@ -66,6 +89,13 @@ def test_gripper_card(device_cards: DeviceCardsPage) -> None:
     log_done("Gripper card OK")
 
 
+@pytest.mark.workflow(
+    group="devices",
+    section="Module cards",
+    label="Thermocycler card",
+    order=60,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_thermocycler_module_card(device_cards: DeviceCardsPage) -> None:
     """Exercise thermocycler controls when a matching module card is present.
 
@@ -81,6 +111,13 @@ def test_thermocycler_module_card(device_cards: DeviceCardsPage) -> None:
     log_done("Thermocycler card OK")
 
 
+@pytest.mark.workflow(
+    group="devices",
+    section="Module cards",
+    label="Heater-Shaker card",
+    order=70,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_heater_shaker_module_card(device_cards: DeviceCardsPage) -> None:
     """Exercise heater-shaker controls when a matching module card is present.
 
@@ -96,6 +133,13 @@ def test_heater_shaker_module_card(device_cards: DeviceCardsPage) -> None:
     log_done("Heater-Shaker card OK")
 
 
+@pytest.mark.workflow(
+    group="devices",
+    section="Module cards",
+    label="Temperature module card",
+    order=80,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_temperature_module_card(device_cards: DeviceCardsPage) -> None:
     """Exercise temperature module controls when a matching module card is present.
 
@@ -111,6 +155,13 @@ def test_temperature_module_card(device_cards: DeviceCardsPage) -> None:
     log_done("Temperature module card OK")
 
 
+@pytest.mark.workflow(
+    group="devices",
+    section="Hardware cards",
+    label="Robot lights",
+    order=90,
+    requires=ROBOT_DETAIL_REQUIRED,
+)
 def test_robot_lights(device_cards: DeviceCardsPage) -> None:
     """Toggle robot lights from the robot overview page.
 

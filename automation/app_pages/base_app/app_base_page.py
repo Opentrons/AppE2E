@@ -26,18 +26,25 @@ class AppBasePage(BasePage):
         expect(toast).to_be_hidden(timeout=5_000)
 
     def close_slideout_by_title(self, title: str) -> None:
-        """Dismiss a slideout by its Slideout_title_* test id."""
-        slideout_title = self.page.get_by_test_id(f"Slideout_title_{title}")
+        """Dismiss a slideout (app 4.x has no Slideout_title_* test ids)."""
+        legacy_title = self.page.get_by_test_id(f"Slideout_title_{title}")
         done = self.page.get_by_text("Done", exact=True)
         if done.count() > 0 and done.is_visible():
             done.click()
         else:
-            close = self.page.get_by_test_id(f"Slideout_icon_close_{title}")
-            if close.count() > 0 and close.is_visible():
+            # Current Slideout close is aria-label="exit"; legacy testid kept as fallback.
+            close = self.page.get_by_role("button", name="exit").or_(
+                self.page.get_by_test_id(f"Slideout_icon_close_{title}")
+            )
+            if close.count() > 0 and close.first.is_visible():
                 try:
-                    close.click(force=True, timeout=2_000)
+                    close.first.click(force=True, timeout=2_000)
                 except Exception:
                     self.page.keyboard.press("Escape")
             else:
                 self.page.keyboard.press("Escape")
-        expect(slideout_title).to_have_count(0)
+        if legacy_title.count() > 0:
+            expect(legacy_title).to_have_count(0)
+        else:
+            # Closed slideouts unmount (see RobotSettingsAdvanced show* guards).
+            expect(self.page.get_by_role("button", name="exit")).to_have_count(0)
