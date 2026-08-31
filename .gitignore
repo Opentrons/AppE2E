@@ -1,6 +1,7 @@
 # Test results and artifacts
 test-results/
 playwright-report/
+artifacts/mcp-screenshots/
 
 # Python cache
 __pycache__/
