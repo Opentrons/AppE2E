@@ -151,8 +151,14 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
         status = "passed"
     artifacts: dict[str, str] = {}
     root = Path.cwd().resolve()
+    screenshot_keys = {
+        "screenshot_path",
+        "screenshot_beginning",
+        "screenshot_middle",
+        "screenshot_end",
+    }
     for name, value in item.user_properties:
-        if name not in {"trace_path", "video_path", "screenshot_path"}:
+        if name not in {"trace_path", "video_path", *screenshot_keys}:
             continue
         artifact_path = Path(str(value)).resolve()
         try:

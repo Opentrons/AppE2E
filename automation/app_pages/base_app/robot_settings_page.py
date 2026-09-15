@@ -82,9 +82,14 @@ class RobotSettingsPage(AppBasePage):
 
     @property
     def page_heading(self) -> Locator:
-        """Page title — scoped to the header, not the breadcrumb crumb."""
-        scope = self.page.locator('[data-sentry-component="RobotSettings"]')
-        return scope.get_by_text(self.PAGE_HEADING, exact=True).first
+        """Loaded marker for Robot Settings.
+
+        The title is plain text (no heading role) and duplicates the breadcrumb
+        link name. ``RobotSettings`` / ``RobotSettingsComponent`` render a
+        Fragment, so ``data-sentry-component=\"RobotSettings\"`` is never in the
+        DOM. Advanced RoundTab is always present on this page.
+        """
+        return self.tab_link("Advanced", "advanced")
 
     def tab_link(self, name: str, slug: str) -> Locator:
         """Return the RoundTab link for a Robot Settings tab."""

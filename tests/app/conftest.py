@@ -262,15 +262,20 @@ def _headed_bring_app_to_front(request: pytest.FixtureRequest, run_local_app: Pa
 
 @pytest.fixture(autouse=True)
 def _record_test_artifacts(request: pytest.FixtureRequest, run_local_app: Page) -> Generator[None, None, None]:
-    """Record per-test Playwright trace and optional headed screencast video."""
+    """Record per-test Playwright trace and optional headed screencast video.
+
+    Calibration uses beginning/middle/end screenshots instead of video (see
+    ``tests/app/calibration/conftest.py``). Device-cards records one suite video.
+    """
     slug = slugify_nodeid(request.node.nodeid)
     headed = is_headed_run(request.config)
     uses_suite_video = request.node.get_closest_marker("device_cards") is not None
+    is_calibration = request.node.get_closest_marker("calibration") is not None
     recording = start_test_recording(
         context=run_local_app.context,
         page=run_local_app,
         slug=slug,
-        record_screencast=headed and not uses_suite_video,
+        record_screencast=headed and not uses_suite_video and not is_calibration,
     )
     yield
     artifacts = stop_test_recording(run_local_app.context, recording)
@@ -296,8 +301,16 @@ def screenshot_helper(run_local_app: Page) -> ScreenshotHelper:
     return ScreenshotHelper(run_local_app)
 
 
+_SCREENSHOT_PROPERTY_LABELS = {
+    "screenshot_beginning": "Beginning",
+    "screenshot_middle": "Middle",
+    "screenshot_end": "End",
+    "screenshot_path": "Failure",
+}
+
+
 def _artifact_extras(item: pytest.Item) -> list:
-    """Build pytest-html extras for trace, video, and failure screenshot artifacts."""
+    """Build pytest-html extras for trace, video, and screenshot artifacts."""
     report_extras: list = []
     for name, path_str in item.user_properties:
         path = Path(path_str)
@@ -311,7 +324,9 @@ def _artifact_extras(item: pytest.Item) -> list:
                 html_extras.html(f'<video width="640" controls><source src="{relative}" type="video/webm"></video>')
             )
             report_extras.append(html_extras.url(relative, name="Download video"))
-        elif name == "screenshot_path":
+        elif name in _SCREENSHOT_PROPERTY_LABELS:
+            label = _SCREENSHOT_PROPERTY_LABELS[name]
+            report_extras.append(html_extras.html(f"<p><strong>{label}</strong></p>"))
             report_extras.append(html_extras.image(relative))
     return report_extras
 
@@ -355,9 +370,9 @@ _MODULE_ORDER = (
     "nav/test_run_setup.py",
 )
 
-# Within calibration: reset first, then status checks, then per-instrument wizards.
+# Within calibration: status checks, then per-instrument wizards.
+# Device reset is manual — see comment in calibration/test_calibration.py.
 _CALIBRATION_TEST_ORDER = (
-    "test_device_reset",
     "test_calibration_flow",
     "test_calibration_overflow_menu",
     "test_96_channel_calibration",

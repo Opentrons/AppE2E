@@ -1,4 +1,4 @@
-"""Calibration suite: Flex setup gate, progress banners, and timing table."""
+"""Calibration suite: Flex setup gate, progress banners, timing table, milestone photos."""
 
 from __future__ import annotations
 
@@ -9,7 +9,14 @@ from collections.abc import Generator
 from typing import Any
 
 import pytest
+from playwright.sync_api import Page
 
+from automation.app_helpers.calibration_photos import (
+    bind_calibration_photos,
+    capture_calibration_photo,
+    unbind_calibration_photos,
+)
+from automation.app_helpers.reporting import slugify_nodeid
 from automation.app_helpers.test_progress import (
     begin_test_timing,
     clear_test_timing_context,
@@ -26,6 +33,17 @@ pytest_runtest_logstart = make_suite_logstart("calibration")
 _SKIP_PROMPT_ENV = "SKIP_FLEX_SETUP_PROMPT"
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Tag calibration-suite tests so app fixtures skip per-test video."""
+    marker = pytest.mark.calibration
+    for item in items:
+        nodeid = item.nodeid.replace("\\", "/")
+        if "/calibration/" not in nodeid:
+            continue
+        if item.get_closest_marker("calibration") is None:
+            item.add_marker(marker)
+
+
 def _confirm_flex_setup(*, request: pytest.FixtureRequest) -> None:
     """Ask the operator to confirm physical Flex prep before destructive/calibration work."""
     if os.environ.get(_SKIP_PROMPT_ENV, "").strip().lower() in {"1", "true", "yes"}:
@@ -35,7 +53,8 @@ def _confirm_flex_setup(*, request: pytest.FixtureRequest) -> None:
     prompt = (
         "\n"
         "Have you set up your Flex?\n"
-        "  Recommended before device reset / calibration:\n"
+        "  Please ensure your device is reset manually before calibration.\n"
+        "  Recommended before calibration:\n"
         "  - Gripper calibrated (manual — not automated here)\n"
         "  - Deck configuration set for attached modules\n"
         "  - Modules attached, powered, and cool\n"
@@ -70,6 +89,27 @@ def confirm_flex_setup(request: pytest.FixtureRequest) -> None:
     """CLI gate once per calibration session: have you set up your Flex?"""
     reset_timing_report()
     _confirm_flex_setup(request=request)
+
+
+@pytest.fixture(autouse=True)
+def _calibration_milestone_photos(
+    request: pytest.FixtureRequest,
+    run_local_app: Page,
+) -> Generator[None, None, None]:
+    """Capture beginning / middle / end screenshots; no per-test video for this suite."""
+    slug = slugify_nodeid(request.node.nodeid)
+    session = bind_calibration_photos(run_local_app, slug)
+    try:
+        yield
+    finally:
+        # Helpers take beginning (Calibration page), middle (probing), end (success).
+        # Short / failed tests fall back here for any missing phase.
+        for phase in ("beginning", "middle", "end"):
+            if phase not in session.paths:
+                capture_calibration_photo(phase)
+        for phase, path in session.paths.items():
+            request.node.user_properties.append((f"screenshot_{phase}", str(path)))
+        unbind_calibration_photos()
 
 
 @pytest.hookimpl(hookwrapper=True)

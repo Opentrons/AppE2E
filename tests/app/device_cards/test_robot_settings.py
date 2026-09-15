@@ -1,8 +1,8 @@
 """Robot Settings tab exercises on the robot detail page.
 
 Runs after ``test_devices_nav`` and before device-card smoke tests. Covers
-T69745–T69756 plus Analytics in plan order (device reset is separate —
-see ``tests/app/calibration/test_calibration.py``).
+T69745–T69756 plus Analytics in plan order (device reset is manual —
+see comment in ``tests/app/calibration/test_calibration.py``).
 
 TODO(T69745/T69746): Handle non-connectable robots that redirect Calibration → Networking.
 TODO(T69751): Pause protocol when robot door opens — OT-2 only; not exercised on Flex.

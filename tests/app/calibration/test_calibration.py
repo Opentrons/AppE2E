@@ -3,56 +3,20 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
-from automation.app_helpers.robot_connection import (
-    DEVICE_RESET_READY_TIMEOUT_S,
-    RobotConnection,
-)
-from automation.app_helpers.test_progress import log_done, log_step, run_timed
-from automation.app_pages import DevicesPage, RobotSettingsPage
+from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages.LPC_Helpers.calibration_helper import CalibrationHelper
 
-# Gripper calibration and deck configuration are still manual (see Flex setup prompt).
+# Gripper calibration and full deck layout are still manual (see Flex setup prompt).
+# Please ensure your device is reset manually before this suite
+# (Robot Settings > Advanced > Device Reset: pipette / gripper / module calibration,
+# protocol run history, labware offsets — then wait for the robot to come back).
 
 """
-Device reset first
 C44408	HS Calibration
 C44407	TD Calibration
 C44406	TC Calibration
 C44404	Devices > Robot > Protocol Run > Module controls
 """
-
-
-@pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
-    label="Reset calibration data",
-    order=60,
-    cases=(("T69755", "Device Reset"),),
-)
-def test_device_reset(
-    run_local_app: Page,
-    robot_name: str,
-    robot_connection: RobotConnection,
-) -> None:
-    """Clear Flex calibration / run data via Device Reset and wait for restart.
-
-    Devices > Robot > Robot Settings > Advanced > Choose reset settings:
-    pipette / gripper / module calibration, protocol run history, labware offsets.
-    Confirms restart, then waits for robot-server health (up to ~20 minutes).
-    """
-    page = run_local_app
-    settings = RobotSettingsPage(page, robot_name=robot_name)
-    run_timed(f"Open Robot Settings for '{robot_name}'", settings.navigate)
-    run_timed(
-        "Device Reset: clear calibration, run history, and labware offsets",
-        settings.reset_flex_calibration_data,
-    )
-    run_timed(
-        f"Wait for robot ready (up to {DEVICE_RESET_READY_TIMEOUT_S / 60:.0f} min)",
-        robot_connection.wait_for_ready_after_reset,
-    )
-    devices = DevicesPage(page, robot_name=robot_name)
-    run_timed(f"Re-open robot detail for '{robot_name}'", devices.navigate)
 
 
 @pytest.mark.workflow(group="run_setup", section="Calibration", label="Review calibration status", order=70)
