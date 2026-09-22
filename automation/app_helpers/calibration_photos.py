@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from playwright.sync_api import Page
 from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import Page
 
-from automation.app_helpers.reporting import SCREENSHOTS_DIR, ensure_test_results_dir, unique_artifact_path
+from automation.app_helpers.reporting import ensure_test_results_dir, screenshots_dir, unique_artifact_path
 from automation.app_helpers.test_progress import log_path
 
 CalibrationPhotoPhase = Literal["beginning", "middle", "end"]
@@ -28,7 +28,7 @@ class CalibrationPhotoSession:
         if phase in self.paths:
             return self.paths[phase]
         ensure_test_results_dir()
-        path = unique_artifact_path(SCREENSHOTS_DIR, f"{self.slug}_{phase}", ".png")
+        path = unique_artifact_path(screenshots_dir(), f"{self.slug}_{phase}", ".png")
         try:
             self.page.screenshot(path=str(path), full_page=True)
         except PlaywrightError as error:

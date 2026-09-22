@@ -19,8 +19,10 @@ from automation.app_helpers.app_version import has_device_details_tabs, parse_ap
 from automation.app_helpers.dev_robot_setup import ensure_localhost_robot_discovered, wait_for_robot_server
 from automation.app_helpers.left_nav import navigate_to
 from automation.app_helpers.reporting import (
+    app_console_log_path,
     capture_failure_screenshot,
     ensure_test_results_dir,
+    path_relative_to_report,
     slugify_nodeid,
     start_test_recording,
     stop_test_recording,
@@ -181,7 +183,8 @@ def run_local_app(
     process: subprocess.Popen | None = None
     playwright: Playwright | None = None
     browser: Browser | None = None
-    app_log = Path("test-results/app-console.log")
+    ensure_test_results_dir()
+    app_log = app_console_log_path()
 
     if open_app.should_attach_only():
         playwright, browser, page = open_app.connect_playwright()
@@ -271,11 +274,16 @@ def _record_test_artifacts(request: pytest.FixtureRequest, run_local_app: Page) 
     headed = is_headed_run(request.config)
     uses_suite_video = request.node.get_closest_marker("device_cards") is not None
     is_calibration = request.node.get_closest_marker("calibration") is not None
+    # Suite video (device_cards) and per-test screencast both use CDP Page.startScreencast.
+    # Tracing screenshots start a second screencast and starve the recorder — keep them off
+    # whenever headed video is in play.
+    headed_video = headed and not is_calibration
     recording = start_test_recording(
         context=run_local_app.context,
         page=run_local_app,
         slug=slug,
-        record_screencast=headed and not uses_suite_video and not is_calibration,
+        record_screencast=headed_video and not uses_suite_video,
+        tracing_screenshots=not headed_video,
     )
     yield
     artifacts = stop_test_recording(run_local_app.context, recording)
@@ -316,7 +324,7 @@ def _artifact_extras(item: pytest.Item) -> list:
         path = Path(path_str)
         if not path.exists():
             continue
-        relative = path.as_posix()
+        relative = path_relative_to_report(path)
         if name == "trace_path":
             report_extras.append(html_extras.url(relative, name="Playwright trace (open in trace viewer)"))
         elif name == "video_path":
@@ -348,7 +356,7 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Ensure the HTML report output directory exists for app tests."""
+    """Ensure today's artifact directories exist for app tests."""
     ensure_test_results_dir()
 
 

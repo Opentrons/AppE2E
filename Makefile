@@ -14,10 +14,16 @@ PYTEST_HEADED := $(if $(HEADED),HEADED=1,)
 	_pytest-app _app-report-banner \
 	test-app test-app-headed test-app-nav test-app-nav-headed \
 	test-app-device-cards test-app-device-cards-headed \
+	test-app-robot-settings test-app-robot-settings-headed \
 	test-app-calibration test-app-calibration-headed run_abr_2_and_4 \
 	test-ui \
 	test-odd test-odd-headed \
 	troubleshoot
+
+# Robot Settings plan: open robot detail first, then settings (one Electron session).
+ROBOT_SETTINGS_PATH := \
+	tests/app/device_cards/test_devices_nav.py \
+	tests/app/device_cards/test_robot_settings.py
 
 # --- Setup & quality ---
 
@@ -77,6 +83,14 @@ test-app-device-cards:
 test-app-device-cards-headed:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/app/device_cards/ HEADED_ENV="HEADED=1"
 
+# T69745–T69756: Devices → robot detail, then Robot Settings (same headed window).
+# Optional filters: PYTEST_ARGS="-k 'not device_reset'" or "-k 'robot_detail or networking'"
+test-app-robot-settings:
+	@$(MAKE) --no-print-directory _pytest-app TEST_PATH="$(ROBOT_SETTINGS_PATH)" HEADED_ENV="$(PYTEST_HEADED)"
+
+test-app-robot-settings-headed:
+	@$(MAKE) --no-print-directory _pytest-app TEST_PATH="$(ROBOT_SETTINGS_PATH)" HEADED_ENV="HEADED=1"
+
 # Interactive Flex setup prompt — keep -s so stdin/stdout stay attached.
 test-app-calibration:
 	@$(MAKE) --no-print-directory _pytest-app \
@@ -113,7 +127,8 @@ _app-report-banner:
 	@echo ""
 	@echo "---------------------------------------------------------"
 	@echo "App tests finished."
-	@echo "Open test-results/report.html for the HTML report."
-	@echo "Videos: test-results/videos/ (headed runs)"
-	@echo "Traces: test-results/traces/"
+	@echo "Open test-results/latest/report.html for the HTML report."
+	@echo "Videos: test-results/latest/videos/ (headed runs)"
+	@echo "Traces: test-results/latest/traces/"
+	@echo "Dated runs: test-results/YYYY-MM/YYYY-MM-DD/"
 	@echo "---------------------------------------------------------"

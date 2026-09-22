@@ -10,9 +10,22 @@ from pathlib import Path
 
 from playwright.sync_api import CDPSession, Page
 
+# Match Playwright tracing's ballpark size. Full-res Electron frames (e.g. 2048x1536)
+# are too large for reliable CDP screencast acks — Chrome stops sending after a few.
+_SCREENCAST_MAX_WIDTH = 1280
+_SCREENCAST_MAX_HEIGHT = 720
+_SCREENCAST_QUALITY = 60
+# Encode assuming ~10 fps; real capture rate varies with paints / ack latency.
+_ENCODE_FRAMERATE = "10"
+
 
 class ScreencastRecorder:
-    """Record the Electron app page via CDP ``Page.startScreencast``."""
+    """Record the Electron app page via CDP ``Page.startScreencast``.
+
+    Must be the only active ``Page.startScreencast`` client on the page. Playwright
+    tracing with ``screenshots=True`` also starts a screencast and will starve or
+    replace this recorder — disable tracing screenshots while this is running.
+    """
 
     def __init__(self, page: Page, output_path: Path) -> None:
         """Store the page to record and the destination ``.webm`` path."""
@@ -28,21 +41,36 @@ class ScreencastRecorder:
         self._cdp.on("Page.screencastFrame", self._on_screencast_frame)
         self._cdp.send(
             "Page.startScreencast",
-            {"format": "jpeg", "everyNthFrame": 1, "quality": 80},
+            {
+                "format": "jpeg",
+                "quality": _SCREENCAST_QUALITY,
+                "everyNthFrame": 1,
+                "maxWidth": _SCREENCAST_MAX_WIDTH,
+                "maxHeight": _SCREENCAST_MAX_HEIGHT,
+            },
         )
 
     def _on_screencast_frame(self, params: dict) -> None:
         """Append a frame and acknowledge it so the next frame is delivered."""
         if self._cdp is None:
             return
-        self._frames.append(base64.b64decode(params["data"]))
-        self._cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
+        try:
+            self._frames.append(base64.b64decode(params["data"]))
+            self._cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
+        except Exception:
+            # A failed ack permanently stalls Chromium screencast; drop this frame
+            # and hope a later paint delivers another with a fresh session id.
+            pass
 
     def stop(self) -> Path | None:
         """Stop screencast and encode collected frames to ``output_path`` when possible."""
         if self._cdp is not None:
             try:
                 self._cdp.send("Page.stopScreencast")
+            except Exception:
+                pass
+            try:
+                self._cdp.detach()
             except Exception:
                 pass
             self._cdp = None
@@ -58,16 +86,16 @@ def encode_jpeg_frames_to_webm(frames: list[bytes], video_path: Path) -> Path | 
     frames_dir = Path(tempfile.mkdtemp(prefix="screencast_"))
     try:
         for index, frame in enumerate(frames):
-            (frames_dir / f"frame_{index:04d}.jpg").write_bytes(frame)
+            (frames_dir / f"frame_{index:06d}.jpg").write_bytes(frame)
         try:
             subprocess.run(
                 [
                     "ffmpeg",
                     "-y",
                     "-framerate",
-                    "10",
+                    _ENCODE_FRAMERATE,
                     "-i",
-                    str(frames_dir / "frame_%04d.jpg"),
+                    str(frames_dir / "frame_%06d.jpg"),
                     "-pix_fmt",
                     "yuv420p",
                     str(video_path),

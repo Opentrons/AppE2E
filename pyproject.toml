@@ -34,6 +34,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# Vendored Cursor skills (PR #20900 update tooling) — not first-party app E2E code.
+extend-exclude = [".cursor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

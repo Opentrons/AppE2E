@@ -12,8 +12,7 @@ USERNAME = "testadmin"
 PASSWORD = "testadminpassword"
 ACCOUNT_INITIAL = USERNAME[0].upper()
 ALREADY_LOGGED_IN_MSG = (
-    f"Already logged in to {ROBOT_NAME} as {USERNAME!r} "
-    f"(account button {ACCOUNT_INITIAL!r} visible; skipping login)."
+    f"Already logged in to {ROBOT_NAME} as {USERNAME!r} (account button {ACCOUNT_INITIAL!r} visible; skipping login)."
 )
 
 

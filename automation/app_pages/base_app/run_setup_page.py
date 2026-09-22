@@ -21,10 +21,14 @@ class RunSetupPage(AppBasePage):
             raise ValueError(f"Unknown run setup step: {title}")
         # Titles like "Camera" also appear on RoundTabs — only keep matches that
         # sit inside a SetupStep accordion (expanded or collapsed content).
-        return self.page.get_by_text(title, exact=True).locator(
-            "xpath=ancestor::*[.//*[@data-testid='SetupStep_content_expanded' "
-            "or @data-testid='SetupStep_content_collapsed']][1]"
-        ).first
+        return (
+            self.page.get_by_text(title, exact=True)
+            .locator(
+                "xpath=ancestor::*[.//*[@data-testid='SetupStep_content_expanded' "
+                "or @data-testid='SetupStep_content_collapsed']][1]"
+            )
+            .first
+        )
 
     def expand(self, title: str) -> Locator:
         root = self.step(title)

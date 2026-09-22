@@ -10,7 +10,7 @@ from _pytest.config import Config
 from _pytest.nodes import Item
 from _pytest.python import Function
 
-from automation.app_helpers.reporting import ensure_test_results_dir
+from automation.app_helpers.reporting import ensure_test_results_dir, report_html_path
 from utility import _pause_for_debugging, troubleshoot_and_pause
 
 
@@ -54,8 +54,12 @@ def pytest_runtest_makereport(item: Item, call: pytest.CallInfo) -> Generator[No
 
 
 def pytest_configure(config: Any) -> None:
-    """Create test-results directory if it doesn't exist."""
-    ensure_test_results_dir()
+    """Create today's test-results day folder and point the HTML report there."""
+    day_dir = ensure_test_results_dir()
+    config.option.htmlpath = str(report_html_path())
+    output = getattr(config.option, "output", None)
+    if output is None or str(output).startswith("test-results"):
+        config.option.output = str(day_dir / "pw-artifacts")
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:

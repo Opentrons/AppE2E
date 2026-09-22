@@ -23,9 +23,7 @@ def _normalize_cases(item: pytest.Item, raw: object) -> list[dict[str, str]]:
     if raw is None:
         return []
     if not isinstance(raw, (list, tuple)):
-        raise pytest.UsageError(
-            f"{item.nodeid}: workflow 'cases' must be a sequence of (id, title) pairs"
-        )
+        raise pytest.UsageError(f"{item.nodeid}: workflow 'cases' must be a sequence of (id, title) pairs")
     cases: list[dict[str, str]] = []
     for entry in raw:
         case_id: str | None = None
@@ -36,9 +34,7 @@ def _normalize_cases(item: pytest.Item, raw: object) -> list[dict[str, str]]:
             case_id = str(entry.get("id", "")).strip()
             title = str(entry.get("title", "")).strip()
         if not case_id or not title:
-            raise pytest.UsageError(
-                f"{item.nodeid}: each workflow case must be (id, title) with non-empty strings"
-            )
+            raise pytest.UsageError(f"{item.nodeid}: each workflow case must be (id, title) with non-empty strings")
         cases.append({"id": case_id, "title": title})
     return cases
 

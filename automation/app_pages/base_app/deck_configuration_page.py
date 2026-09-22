@@ -100,9 +100,7 @@ class DeckConfigurationPage(AppBasePage):
         when Identify is present. Intersect role=Add with the option testid so we
         never click Identify (``.first`` on the testid alone).
         """
-        return self.page.get_by_role("button", name="Add", exact=True).and_(
-            self.page.get_by_test_id(option)
-        )
+        return self.page.get_by_role("button", name="Add", exact=True).and_(self.page.get_by_test_id(option))
 
     def _click_option_add(self, option: str | re.Pattern[str]) -> None:
         """Click the primary Add control for the given FixtureOption testid/pattern."""

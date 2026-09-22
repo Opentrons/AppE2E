@@ -19,10 +19,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from automation.app_helpers.reporting import results_day_dir
+
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
 RESULTS_DIR = ROOT / "test-results"
 ARTIFACTS_DIR = ROOT / "artifacts"
+
 ENV_PATH = ROOT / ".env"
 DEFAULT_PROTOCOL_NAME = "Flex Smoke Test"
 
@@ -239,9 +242,10 @@ class PytestRunner:
             if any("/calibration/" in node_id for node_id in node_ids) and not request.flex_ready:
                 raise PermissionError("Confirm that the Flex is set up before running calibration tests.")
 
-            RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+            day_dir = ROOT / results_day_dir()
+            day_dir.mkdir(parents=True, exist_ok=True)
             self.run_id = uuid4().hex
-            event_path = RESULTS_DIR / f"ui-events-{self.run_id}.ndjson"
+            event_path = day_dir / f"ui-events-{self.run_id}.ndjson"
             event_path.write_text("", encoding="utf-8")
             self._cancelled = False
             robot_name = request.robot_name.strip()

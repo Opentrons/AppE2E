@@ -37,6 +37,7 @@ make setup test-setup          # once
 make configure-robot           # interactive .env (robot IP / name)
 make test-app-headed           # packaged Opentrons.app over CDP
 make test-app-device-cards-headed
+make test-app-robot-settings-headed   # robot detail → Robot Settings (one session)
 make test-app-nav-headed
 make test-app-headed PYTEST_ARGS="-k test_devices_nav"
 make test-odd-headed ROBOT_IP=<flex-ip>   # ODD CDP (Developer Tools on)

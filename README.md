@@ -46,6 +46,7 @@ make test-app                                    # Full app suite
 make test-app-headed                             # Headed Electron window
 make test-app-nav-headed                         # Navigation smoke
 make test-app-device-cards-headed                # Device card exercises
+make test-app-robot-settings-headed              # Robot detail → Robot Settings (one session)
 make test-app-headed PYTEST_ARGS="-k test_name"  # One test
 make run_abr_2_and_4                             # ABR2/ABR4 orchestration
 ```
@@ -88,9 +89,11 @@ make prep                    # format + typecheck
 
 ## Artifacts
 
-- HTML report: `test-results/report.html`
-- Videos: `test-results/videos/` (headed runs)
-- Traces: `test-results/traces/`
+Runs are grouped under ``test-results/YYYY-MM/YYYY-MM-DD/``. ``test-results/latest`` symlinks to today's folder.
+
+- HTML report: `test-results/latest/report.html`
+- Videos: `test-results/latest/videos/` (headed runs)
+- Traces: `test-results/latest/traces/`
 
 Do not commit `test-results/` (gitignored).
 

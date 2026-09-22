@@ -114,11 +114,19 @@ class DevicesPage(AppBasePage):
         )
 
     def navigate(self) -> None:
-        """Open Devices, select the robot card, and wait for robot detail."""
+        """Open robot detail, preferring a hash deep-link over landing + card click."""
         dismiss_blocking_ui(self.page)
 
         if self.on_robot_detail():
             return
+
+        base = self.page.url.split("#", 1)[0]
+        self.page.goto(f"{base}#/devices/{self.robot_name}")
+        try:
+            expect(self.page).to_have_url(self.robot_detail_url, timeout=10_000)
+            return
+        except AssertionError:
+            pass
 
         if not self.DEVICES_LANDING_URL.search(self.page.url):
             navigate_to(self.page, "Devices", self.DEVICES_LANDING_URL)

@@ -1,8 +1,8 @@
 """Robot Settings tab exercises on the robot detail page.
 
 Runs after ``test_devices_nav`` and before device-card smoke tests. Covers
-T69745–T69756 plus Analytics in plan order (device reset is manual —
-see comment in ``tests/app/calibration/test_calibration.py``).
+T69745–T69756 plus Analytics in plan order. Device Reset (T69755) runs last
+because it restarts the robot.
 
 TODO(T69745/T69746): Handle non-connectable robots that redirect Calibration → Networking.
 TODO(T69751): Pause protocol when robot door opens — OT-2 only; not exercised on Flex.
@@ -217,3 +217,22 @@ def test_analytics(robot_settings: RobotSettingsPage) -> None:
     log_step("Validate Camera usage/analytics controls")
     robot_settings.validate_analytics()
     log_done("Analytics OK")
+
+
+@pytest.mark.workflow(
+    group="robot_settings",
+    section="Advanced",
+    label="Device Reset",
+    order=130,
+    requires=ROBOT_DETAIL_REQUIRED,
+    cases=(("T69755", "Device Reset"),),
+)
+def test_advanced_device_reset(run_local_app: Page, robot_name: str) -> None:
+    """T69755: Robot Settings > Advanced > Device Reset (all except SSH keys).
+
+    Restarts the robot; keep this last in the robot_settings group.
+    """
+    log_step("Device Reset: select all except SSH public keys, then restart")
+    settings = RobotSettingsPage(run_local_app, robot_name=robot_name)
+    settings.reset_all_except_ssh()
+    log_done("Device reset confirmed; landed on Devices")

@@ -21,20 +21,22 @@ class RobotSettingsPage(AppBasePage):
     PIPETTE_CALIBRATIONS = "Pipette Calibrations"
     PIPETTE_OFFSET_CALIBRATIONS = "Pipette Offset Calibrations"
     WIFI_HEADING = "Wi-Fi"
-    ROBOT_NAME = "Robot Name"
-    ROBOT_SERVER_VERSION = "Robot Server Version"
+    # App renders sentence case (DisplayRobotName / RenameRobotSlideout).
+    ROBOT_NAME = "Robot name"
+    # device_settings.json: "robot_server_version"
+    ROBOT_SERVER_VERSION = "Robot server version"
     PAUSE_PROTOCOL = "Pause protocol when robot door opens"
     JUPYTER_NOTEBOOK = "Jupyter Notebook"
     LAUNCH_JUPYTER_NOTEBOOK = "Launch Jupyter Notebook"
     UPDATE_ROBOT_SOFTWARE = "Update robot software manually with a local file (.zip)"
-    DEVICE_RESET = "Device Reset"
+    DEVICE_RESET = "Device reset"
     REINSTALL = "reinstall"
     # App renders this label lowercase (RobotServerVersion).
     UP_TO_DATE = "up to date"
     RENAME_ROBOT = "Rename robot"
     CHOOSE_RESET_SETTINGS = "Choose reset settings"
     RENAME_ROBOT_SLIDEOUT = "Rename Robot"
-    DEVICE_RESET_SLIDEOUT = "Device Reset"
+    DEVICE_RESET_SLIDEOUT = "Device reset"
     CAMERA_STATUS = "Camera Status"
     LIVE_VIDEO = "Live video"
     # Visible Usage Settings title; Robot Settings wrongly reuses Live video as aria-label.
@@ -49,6 +51,9 @@ class RobotSettingsPage(AppBasePage):
     CLEAR_LABWARE_OFFSET_DATA = "Clear labware offset data"
     CLEAR_DATA_AND_RESTART = "Clear data and restart robot"
     RESET_TO_FACTORY_TITLE = "Reset to factory settings?"
+    SELECT_ALL_SETTINGS = "Select all settings"
+    CLEAR_CUSTOM_BOOT_SCRIPTS = "Clear custom boot scripts"
+    CLEAR_SSH_PUBLIC_KEYS = "Clear SSH public keys"
     CONFIRM_RESET = "Confirm"
     FLEX_CALIBRATION_RESET_OPTIONS = (
         CLEAR_PIPETTE_CALIBRATION,
@@ -103,13 +108,25 @@ class RobotSettingsPage(AppBasePage):
         return banner.text()
 
     def navigate(self, *, tab: tuple[str, str] | None = None) -> None:
-        """Open Robot Settings (overflow), optionally a specific tab like Advanced."""
+        """Open Robot Settings, optionally a specific tab like Advanced.
+
+        Prefers a hash deep-link from Protocols (or elsewhere) so we skip Devices →
+        card → overflow. Falls back to the click path when the route does not stick.
+        """
         dismiss_blocking_ui(self.page)
         if not self.robot_settings_url.search(self.page.url):
             devices = DevicesPage(self.page, robot_name=self.robot_name)
-            if not re.search(rf"#/devices/{re.escape(self.robot_name)}", self.page.url):
-                devices.navigate()
-            devices.open_robot_settings()
+            on_this_robot = re.search(rf"#/devices/{re.escape(self.robot_name)}", self.page.url)
+            if on_this_robot:
+                devices.open_robot_settings()
+            else:
+                base = self.page.url.split("#", 1)[0]
+                self.page.goto(f"{base}#/devices/{self.robot_name}/robot-settings")
+                try:
+                    expect(self.page).to_have_url(self.robot_settings_url, timeout=10_000)
+                except AssertionError:
+                    devices.navigate()
+                    devices.open_robot_settings()
             expect(self.page).to_have_url(self.robot_settings_url)
         expect(self.page_heading).to_be_visible()
         if tab is not None:
@@ -153,8 +170,25 @@ class RobotSettingsPage(AppBasePage):
         print("Applitoools diff expected, alert if significantly different")
 
     def validate_calibration_pipettes(self) -> None:
-        """T69746: Calibration > Pipette Calibrations."""
-        print("Pipette Calibraiton covered by validate_calibration_about")
+        """T69746: Robot Settings > Calibration > Pipette Calibrations.
+
+        Opens the Calibration tab, asserts the Pipette Calibrations section, and
+        lists each pipette row status (including ``Not calibrated``).
+        """
+        from automation.app_helpers.test_progress import log_step
+        from automation.app_pages.LPC_Helpers.calibration_helper import CalibrationHelper
+
+        dismiss_blocking_ui(self.page)
+        self.open_tab("Calibration", "calibration")
+        expect(self.page.get_by_text(self.PIPETTE_CALIBRATIONS, exact=True)).to_be_visible()
+
+        calibration = CalibrationHelper(self.page, robot_name=self.robot_name)
+        calibration.wait_for_calibration_data()
+        items = calibration.list_calibration_status(categories=["pipette"])
+        for item in items:
+            log_step(f"Pipette: {item.label} ({item.serial}) — {item.state_label}")
+
+        ScreenshotHelper(self.page).capture("robot_settings", "calibration_pipettes")
 
     def validate_networking(self) -> None:
         """T69747: Select the Networking RoundTab and capture a screenshot."""
@@ -210,12 +244,13 @@ class RobotSettingsPage(AppBasePage):
         return label.locator("..").locator("p").last.inner_text().strip()
 
     def read_robot_server_version(self) -> str:
-        """Return the read-only Robot Server Version from Advanced."""
+        """Return the read-only Robot server version from Advanced."""
         self.navigate(tab=("Advanced", "advanced"))
-        scope = self.page.locator('[data-sentry-component="RobotServerVersion"]')
-        label = scope.get_by_text(self.ROBOT_SERVER_VERSION, exact=True)
-        expect(label).to_be_visible()
-        return label.locator("..").locator("p").first.inner_text().strip()
+        # RobotServerVersion is a fragment — no data-sentry-component wrapper.
+        heading = self.page.get_by_text(self.ROBOT_SERVER_VERSION, exact=True)
+        heading.scroll_into_view_if_needed()
+        expect(heading).to_be_visible()
+        return heading.locator("+ p").inner_text().strip()
 
     def _name_with_test_suffix(self, name: str) -> str:
         """Return ``{name}TEST`` capped to the app's 17-character alphanumeric limit."""
@@ -294,9 +329,14 @@ class RobotSettingsPage(AppBasePage):
         expect(self.page.get_by_text(configured_name, exact=True).first).to_be_visible()
 
     def validate_advanced_robot_server_version(self) -> None:
-        """T69750: Advanced > Robot server Version."""
+        """T69750: Advanced > Robot server version."""
         self.navigate(tab=("Advanced", "advanced"))
-        expect(self.page.get_by_text(self.ROBOT_SERVER_VERSION, exact=True)).to_be_visible()
+        # RobotServerVersion is a fragment — no data-sentry-component wrapper.
+        heading = self.page.get_by_text(self.ROBOT_SERVER_VERSION, exact=True)
+        heading.scroll_into_view_if_needed()
+        expect(heading).to_be_visible()
+        # Next sibling <p> is ``vX.Y.Z`` when connected, else ``Unknown``.
+        expect(heading.locator("+ p")).to_have_text(re.compile(r"^(v\d|Unknown)"))
 
     def validate_advanced_pause_on_door_open(self) -> None:
         """T69751: Advanced > Pause protocol when robot door opens (OT-2 only)."""
@@ -350,17 +390,34 @@ class RobotSettingsPage(AppBasePage):
         expect(self.page.get_by_role("button", name=self.CLEAR_DATA_AND_RESTART)).to_be_visible()
 
     def reset_option_checkbox(self, label: str) -> Locator:
-        """Return a Device Reset slideout checkbox by its visible label."""
-        return self.page.get_by_role("checkbox", name=label)
+        """Return the CheckboxField input for a Device Reset option.
+
+        The input is visually hidden (clip-path); click via
+        ``click_checkbox_label`` / the wrapping ``<label>``, not this locator.
+        """
+        return (
+            self.page.locator("label")
+            .filter(has=self.page.get_by_text(re.compile(rf"^{re.escape(label)}$")))
+            .locator('input[type="checkbox"]')
+        )
+
+    def set_reset_option(self, label: str, *, checked: bool) -> None:
+        """Set the checked state of a Device Reset slideout checkbox."""
+        box = self.reset_option_checkbox(label)
+        expect(box).to_be_attached()
+        if box.is_checked() != checked:
+            # CheckboxField: click the label — the input is clipped and sibling
+            # Box text intercepts pointer events on the input itself.
+            self.click_checkbox_label(label)
+        if checked:
+            expect(box).to_be_checked()
+        else:
+            expect(box).not_to_be_checked()
 
     def select_reset_options(self, labels: tuple[str, ...] | None = None) -> None:
         """Check the given Device Reset options (default: Flex calibration + run data)."""
         for label in labels or self.FLEX_CALIBRATION_RESET_OPTIONS:
-            box = self.reset_option_checkbox(label)
-            expect(box).to_be_visible()
-            if not box.is_checked():
-                box.click()
-            expect(box).to_be_checked()
+            self.set_reset_option(label, checked=True)
 
     def confirm_device_reset(self) -> None:
         """Clear data and restart robot, confirm the warning modal, land on Devices."""
@@ -384,4 +441,28 @@ class RobotSettingsPage(AppBasePage):
             run_timed("Navigate to Robot Settings", self.navigate)
         run_timed("Open Device Reset slideout", self.open_device_reset_slideout)
         run_timed("Select Flex calibration / run-data reset options", self.select_reset_options)
+        run_timed("Confirm clear data and restart robot", self.confirm_device_reset)
+
+    def select_all_reset_options_except_ssh(self) -> None:
+        """Check Select all settings, then clear only Clear SSH public keys.
+        Select-all is derived from the individual options, so it goes
+        unchecked (indeterminate) once SSH keys is deselected.
+        """
+        self.set_reset_option(self.SELECT_ALL_SETTINGS, checked=True)
+        for label in self.FLEX_CALIBRATION_RESET_OPTIONS + (self.CLEAR_CUSTOM_BOOT_SCRIPTS,):
+            expect(self.reset_option_checkbox(label)).to_be_checked()
+        self.set_reset_option(self.CLEAR_SSH_PUBLIC_KEYS, checked=False)
+        expect(self.reset_option_checkbox(self.SELECT_ALL_SETTINGS)).not_to_be_checked()
+
+    def reset_all_except_ssh(self) -> None:
+        """Select all Device Reset options except SSH keys; clear data and restart."""
+        from automation.app_helpers.test_progress import run_timed
+
+        if not self.robot_settings_url.search(self.page.url):
+            run_timed("Navigate to Robot Settings", self.navigate)
+        run_timed("Open Device Reset slideout", self.open_device_reset_slideout)
+        run_timed(
+            "Select all reset options except SSH keys",
+            self.select_all_reset_options_except_ssh,
+        )
         run_timed("Confirm clear data and restart robot", self.confirm_device_reset)

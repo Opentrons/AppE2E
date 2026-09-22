@@ -11,7 +11,12 @@ from playwright.sync_api import Page
 from pytest_html import extras as html_extras
 
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
-from automation.app_helpers.reporting import VIDEOS_DIR, ensure_test_results_dir, unique_artifact_path
+from automation.app_helpers.reporting import (
+    ensure_test_results_dir,
+    path_relative_to_report,
+    unique_artifact_path,
+    videos_dir,
+)
 from automation.app_helpers.screencast_recorder import ScreencastRecorder
 from automation.app_helpers.test_progress import log_done, log_step, make_suite_logstart
 from automation.app_pages import DeviceCardsPage, DevicesPage
@@ -32,7 +37,7 @@ def _device_cards_continuous_video(
     screencast: ScreencastRecorder | None = None
     if is_headed_run(request.config):
         ensure_test_results_dir()
-        video_path = unique_artifact_path(VIDEOS_DIR, "device_cards", ".webm")
+        video_path = unique_artifact_path(videos_dir(), "device_cards", ".webm")
         screencast = ScreencastRecorder(run_local_app, video_path)
         try:
             screencast.start()
@@ -54,7 +59,7 @@ def _device_cards_continuous_video(
 
 def _device_cards_video_extras(video_path: str) -> list:
     """Build pytest-html extras for the suite screencast."""
-    relative = Path(video_path).as_posix()
+    relative = path_relative_to_report(Path(video_path))
     return [
         html_extras.html(f'<video width="640" controls><source src="{relative}" type="video/webm"></video>'),
         html_extras.url(relative, name="Download device_cards video"),
