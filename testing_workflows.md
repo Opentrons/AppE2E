@@ -15,6 +15,7 @@ This repo automates **Opentrons desktop app (Electron) E2E** against a real Flex
 | **App Settings** | 10 TestRail cases across 4 tab tests (T69757–T69766, T69848) + 1 advanced preference | Gear-menu General / Privacy / Advanced / Feature Flags |
 | **Protocols & labware** | 7 flows (+ labware T69770) | Open protocol, detail tabs, reanalyze / send / show in folder / delete cancel, labware landing |
 | **Protocol run & setup** | 2 run-surface flows + **5** Setup steps | Run tabs (incl. Module Controls / C722), run header, Instruments → Camera setup |
+| **Module calibration** | 3 flows (C44406–C44408) | Full Module Wizard for Thermocycler, Temperature Module, and Heater-Shaker |
 | **Update / downgrade (robot API)** | Smoke Zip / USB / consecutive downgrade+upgrade (C44434-adjacent) | System image apply over network or USB serial + post-restart health (`Regression_test_tooling`) |
 
 **Rough total:** ~45 Playwright UI flows in `device_cards` / `nav`, **plus** automated Flex system update ↔ downgrade via `update_robot.py` (see section below).
@@ -24,6 +25,7 @@ This repo automates **Opentrons desktop app (Electron) E2E** against a real Flex
 | `make test-app-robot-settings-headed` | Robot detail → Robot Settings (Device Reset last) |
 | `make test-app-device-cards-headed` | Full `device_cards/` (settings + cards + deck + file manager + run history) |
 | `make test-app-nav-headed` | Full `nav/` (App Settings, protocols, labware, run tabs, setup) |
+| `make test-app-calibration-headed` | Module Wizard calibration (C44406–C44408) |
 | `update_robot.py --usb --file …` | Real system update / downgrade (not Playwright) |
 
 ### Gaps / not fully covered yet (review checklist)
@@ -34,7 +36,6 @@ This repo automates **Opentrons desktop app (Electron) E2E** against a real Flex
 | **T69756** Robot Server Reinstall | Exists in code; **omitted from this runbook** (not part of the documented plan) |
 | **T69752** | No ticket / no test in repo |
 | **App language round-trip** | Placeholder **skipped** (no page-object helper yet) |
-| **Module calibration** (T69769–T69771 / C44406–C44408) | Automated under `tests/app/calibration/` (see bottom) — not in `device_cards` / `nav` |
 | **ODD / ABR** | Separate suites (`tests/odd/`, `abr_orchestration/`) — out of scope here |
 | **C607 Module & Fixture Labels** | Partial: deck config + Setup → Deck Hardware (closest coverage) |
 | **App UI update from device page / downgrade via App** | Robot zip path **done** via tooling; full **desktop-app** update wizard still only partial (`test_advanced_update_robot_software`) |
@@ -380,18 +381,34 @@ make test-app-nav-headed
 
 ---
 
-## T69769 / T69770 / T69771 — Module Calibration
+## Module Calibration — `tests/app/calibration`
 
-Outside `device_cards` / `nav` (`tests/app/calibration/`):
+**Path:** Robot Settings → Calibration → Module Calibration
 
-- **T69769** — Thermocycler (TC) calibration  
-- **T69770** — Temperature Module (TD) calibration  
-- **T69771** — Heater-Shaker (HS) calibration  
+Deck must already have the Heater-Shaker, Temperature Module, and Thermocycler configured (see deck setup). Each wizard needs a calibrated pipette, the calibration adapter and probe, and a cool module. Open the Thermocycler lid before Confirm placement.
 
-Also tagged in code as C44406 / C44407 / C44408.
+### C44408 — Calibrate Heater-Shaker
 
 ```bash
-make test-app-calibration-headed PYTEST_ARGS="-k 'heater_shaker or temperature_module or thermocycler'"
+make test-app-calibration-headed PYTEST_ARGS="-k test_heater_shaker_calibration"
+```
+
+### C44407 — Calibrate Temperature Module
+
+```bash
+make test-app-calibration-headed PYTEST_ARGS="-k test_temperature_module_calibration"
+```
+
+### C44406 — Calibrate Thermocycler
+
+```bash
+make test-app-calibration-headed PYTEST_ARGS="-k test_thermocycler_calibration"
+```
+
+Run all three:
+
+```bash
+make test-app-calibration-headed PYTEST_ARGS="-k 'test_heater_shaker_calibration or test_temperature_module_calibration or test_thermocycler_calibration'"
 ```
 
 ---

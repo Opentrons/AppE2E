@@ -4,9 +4,11 @@ import pytest
 from playwright.sync_api import Page
 
 from automation.app_helpers.test_progress import log_done, log_step
+from automation.app_pages import DeckConfigurationPage
 from automation.app_pages.LPC_Helpers.calibration_helper import CalibrationHelper
 
-# Gripper calibration and full deck layout are still manual (see Flex setup prompt).
+# Gripper calibration is still manual (see Flex setup prompt).
+# Deck Configuration for HS / Temp / TC is checked before module calibration.
 # Please ensure your device is reset manually before this suite
 # (Robot Settings > Advanced > Device Reset: pipette / gripper / module calibration,
 # protocol run history, labware offsets — then wait for the robot to come back).
@@ -17,6 +19,10 @@ C44407	TD Calibration
 C44406	TC Calibration
 C44404	Devices > Robot > Protocol Run > Module controls
 """
+
+DECK_CONFIG_FOR_MODULES = (
+    "tests/app/calibration/test_calibration.py::test_deck_configuration_before_modules"
+)
 
 
 @pytest.mark.workflow(group="run_setup", section="Calibration", label="Review calibration status", order=70)
@@ -81,8 +87,34 @@ def test_96_channel_calibration(run_local_app: Page, robot_name: str) -> None:
 @pytest.mark.workflow(
     group="run_setup",
     section="Calibration",
+    label="Check deck configuration for modules",
+    order=95,
+)
+def test_deck_configuration_before_modules(
+    run_local_app: Page,
+    robot_name: str,
+    device_details_tabs: bool,
+) -> None:
+    """Verify HS / Temp / TC deck slots before Module Wizard calibration.
+
+    Empty deck → standard QA layout. Already configured but missing a calibration
+    module → fail with the current labels.
+    """
+    if not device_details_tabs:
+        pytest.skip("Deck Configuration tab requires the Device Details tabs layout.")
+
+    log_step(f"Check Deck Configuration for '{robot_name}' before module calibration")
+    deck = DeckConfigurationPage(run_local_app, robot_name=robot_name)
+    labels = deck.ensure_calibration_modules_configured()
+    log_done(f"Deck ready for module calibration: {labels}")
+
+
+@pytest.mark.workflow(
+    group="run_setup",
+    section="Calibration",
     label="Calibrate Heater-Shaker",
     order=100,
+    requires=DECK_CONFIG_FOR_MODULES,
     cases=(("C44408", "HS Calibration"),),
 )
 def test_heater_shaker_calibration(run_local_app: Page, robot_name: str) -> None:
@@ -117,6 +149,7 @@ def test_heater_shaker_calibration(run_local_app: Page, robot_name: str) -> None
     section="Calibration",
     label="Calibrate Temperature Module",
     order=110,
+    requires=DECK_CONFIG_FOR_MODULES,
     cases=(("C44407", "TD Calibration"),),
 )
 def test_temperature_module_calibration(run_local_app: Page, robot_name: str) -> None:
@@ -151,6 +184,7 @@ def test_temperature_module_calibration(run_local_app: Page, robot_name: str) ->
     section="Calibration",
     label="Calibrate Thermocycler",
     order=120,
+    requires=DECK_CONFIG_FOR_MODULES,
     cases=(("C44406", "TC Calibration"),),
 )
 def test_thermocycler_calibration(run_local_app: Page, robot_name: str) -> None:

@@ -56,9 +56,9 @@ def _confirm_flex_setup(*, request: pytest.FixtureRequest) -> None:
         "  Please ensure your device is reset manually before calibration.\n"
         "  Recommended before calibration:\n"
         "  - Gripper calibrated (manual — not automated here)\n"
-        "  - Deck configuration set for attached modules\n"
         "  - Modules attached, powered, and cool\n"
         "  - Calibration adapters + pipette probe ready\n"
+        "  (Deck Configuration for HS / Temp / TC is checked before module calib)\n"
         "\n"
         "Continue? [y/N]: "
     )

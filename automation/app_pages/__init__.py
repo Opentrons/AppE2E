@@ -26,7 +26,14 @@ from automation.app_pages.base_app import (
     TemperatureModuleCard,
     ThermocyclerCard,
 )
-from automation.app_pages.odd import OddHomePage
+from automation.app_pages.odd import (
+    OddHomePage,
+    OddInstrumentsPage,
+    OddKebabMenu,
+    OddProtocolsPage,
+    OddSettingsPage,
+    OddShell,
+)
 
 __all__ = [
     "AppBasePage",
@@ -44,6 +51,11 @@ __all__ = [
     "ModuleCard",
     "ModuleCardSpec",
     "OddHomePage",
+    "OddInstrumentsPage",
+    "OddKebabMenu",
+    "OddProtocolsPage",
+    "OddSettingsPage",
+    "OddShell",
     "PLATE_READER",
     "PlateReaderCard",
     "ProtocolOverflowMenu",

@@ -65,6 +65,40 @@ class DeckConfigurationPage(AppBasePage):
             labels.extend([name] * count)
         return labels
 
+    # Modules that Module Wizard calibration exercises (HS / TD / TC).
+    CALIBRATION_MODULE_LABELS = ("Temperature", "Heater-Shaker", "Thermocycler")
+
+    def ensure_calibration_modules_configured(self) -> list[str]:
+        """Open Deck Configuration and ensure HS / Temp / TC slots are set.
+
+        If the deck is empty, apply the standard QA lab layout. If it is already
+        populated but missing a calibration module, raise with the current labels.
+        Returns the configured labels after the check.
+        """
+        self.open()
+        labels = self.configured_module_labels()
+        present = set(labels)
+        missing = [name for name in self.CALIBRATION_MODULE_LABELS if name not in present]
+
+        if not missing:
+            return labels
+
+        if labels:
+            raise AssertionError(
+                "Deck is configured but missing modules required for calibration: "
+                f"{missing}. Current labels: {labels}"
+            )
+
+        self.configure_standard_empty_deck()
+        after = self.configured_module_labels()
+        still_missing = [name for name in self.CALIBRATION_MODULE_LABELS if name not in set(after)]
+        if still_missing:
+            raise AssertionError(
+                "Standard empty-deck setup did not place calibration modules: "
+                f"{still_missing}. Labels after setup: {after}"
+            )
+        return after
+
     def dismiss_open_add_modal(self) -> None:
         """Close a leftover Add-to-slot modal if one is open."""
         close = self.page.locator('[data-testid^="ModalHeader_icon_close_"]')

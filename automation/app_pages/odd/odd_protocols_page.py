@@ -7,13 +7,12 @@ import re
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.screenshot_helper import ScreenshotHelper
-from automation.app_pages.base_app.app_base_page import AppBasePage
+from automation.app_pages.odd.odd_shell import OddShell
 
 
-class OddProtocolsPage(AppBasePage):
+class OddProtocolsPage(OddShell):
     """Protocols dashboard and protocol details on the Flex ODD."""
 
-    PROTOCOLS_URL = re.compile(r"#?/protocols/?$")
     PROTOCOL_DETAIL_URL = re.compile(r"#?/protocols/.+")
     PROTOCOL_CARD_TEST_ID = "protocol_card"
     DETAIL_TABS = ("Summary", "Parameters", "Hardware", "Labware", "Liquids", "Deck")
@@ -32,7 +31,7 @@ class OddProtocolsPage(AppBasePage):
     @property
     def nav_link(self) -> Locator:
         """Top-nav Protocols link."""
-        return self.page.get_by_role("link", name="Protocols")
+        return self.protocols_nav
 
     @property
     def protocol_cards(self) -> Locator:
@@ -41,9 +40,7 @@ class OddProtocolsPage(AppBasePage):
 
     def open(self) -> None:
         """Open the Protocols dashboard from the ODD top nav."""
-        expect(self.nav_link).to_be_visible()
-        self.nav_link.click()
-        expect(self.page).to_have_url(self.PROTOCOLS_URL, timeout=15_000)
+        self.open_protocols()
 
     def expect_protocol_list(self) -> None:
         """Assert the All Protocols list (sort headers + at least one card) is visible."""
