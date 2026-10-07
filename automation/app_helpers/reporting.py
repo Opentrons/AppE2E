@@ -6,7 +6,10 @@ month and day. ``test-results/latest`` is a symlink to today's day folder.
 
 from __future__ import annotations
 
+import os
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -14,10 +17,11 @@ from pathlib import Path
 from playwright.sync_api import BrowserContext, Page
 from playwright.sync_api import Error as PlaywrightError
 
-from automation.app_helpers.screencast_recorder import ScreencastRecorder
+from automation.app_helpers.screencast_recorder import ScreencastRecorder, concat_mp4s
 
 TEST_RESULTS_ROOT = Path("test-results")
 _ARTIFACT_SUBDIRS = ("videos", "traces", "screenshots", "pw-artifacts")
+_workflow_segments: dict[str, list[Path]] = {}
 
 
 def results_day_dir(day: date | None = None) -> Path:
@@ -132,6 +136,66 @@ class ActiveTestRecording:
     tracing_started: bool = False
 
 
+def video_embed_html(relative: str, path: Path) -> str:
+    """Return an HTML5 video tag that plays mp4 or webm in the report."""
+    mime = "video/mp4" if path.suffix.lower() == ".mp4" else "video/webm"
+    return f'<video width="640" controls playsinline preload="metadata"><source src="{relative}" type="{mime}"></video>'
+
+
+def current_pytest_nodeid() -> str | None:
+    """Return the node id of the test pytest is running, without the phase suffix."""
+    current = os.environ.get("PYTEST_CURRENT_TEST", "")
+    nodeid = current.split(" (", 1)[0].strip()
+    return nodeid or None
+
+
+@contextmanager
+def record_workflow_video(page: Page, label: str) -> Iterator[None]:
+    """Record ``page`` for the with-block when this pytest run is headed.
+
+    Segments are kept until :func:`finalize_workflow_video` so a test that
+    opens the desktop app and then the on-device screen becomes one video.
+    """
+    from run_config import is_headed_from_playwright_env
+
+    if not is_headed_from_playwright_env():
+        yield
+        return
+    nodeid = current_pytest_nodeid()
+    slug = f"{slugify_nodeid(nodeid or label)}__{label}"
+    video_path = unique_artifact_path(videos_dir(), slug, ".mp4")
+    recorder = ScreencastRecorder(page, video_path)
+    started = False
+    try:
+        recorder.start()
+        started = True
+    except Exception as error:
+        print(f"\n⚠️  Unable to start {label} video: {error}")
+    try:
+        yield
+    finally:
+        if started:
+            saved = recorder.stop()
+            if saved is not None and nodeid is not None:
+                _workflow_segments.setdefault(nodeid, []).append(saved)
+
+
+def take_workflow_segments(nodeid: str) -> list[Path]:
+    """Remove and return video segments recorded for ``nodeid``."""
+    return _workflow_segments.pop(nodeid, [])
+
+
+def finalize_workflow_video(nodeid: str, slug: str) -> Path | None:
+    """Join any context-manager segments for ``nodeid`` into one mp4."""
+    parts = take_workflow_segments(nodeid)
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0]
+    saved = concat_mp4s(parts, unique_artifact_path(videos_dir(), slug, ".mp4"))
+    return saved or parts[-1]
+
+
 def start_test_recording(
     *,
     context: BrowserContext,
@@ -140,19 +204,16 @@ def start_test_recording(
     record_screencast: bool,
     tracing_screenshots: bool | None = None,
 ) -> ActiveTestRecording:
-    """Start Playwright tracing and optional CDP screencast for one test.
+    """Start Playwright tracing and optional headed video for one test.
 
-    Chromium allows only one ``Page.startScreencast`` stream. Tracing with
-    ``screenshots=True`` starts its own screencast, which replaces any active
-    ``ScreencastRecorder`` (suite or per-test). Default: disable tracing
-    screenshots whenever we record screencast video; callers can also pass
-    ``tracing_screenshots=False`` when a session-scoped suite video is running.
+    Video is a wall-clock mp4 from CDP screenshots, not ``Page.startScreencast``,
+    so tracing screenshots can stay on.
     """
     ensure_test_results_dir()
     trace_path = unique_artifact_path(traces_dir(), slug, ".zip")
-    video_path = unique_artifact_path(videos_dir(), slug, ".webm") if record_screencast else None
+    video_path = unique_artifact_path(videos_dir(), slug, ".mp4") if record_screencast else None
     if tracing_screenshots is None:
-        tracing_screenshots = not record_screencast
+        tracing_screenshots = True
 
     recording = ActiveTestRecording(
         slug=slug,
@@ -176,8 +237,8 @@ def start_test_recording(
         try:
             screencast.start()
             recording.screencast = screencast
-        except PlaywrightError as error:
-            print(f"\n⚠️  Unable to start screencast for {slug}: {error}")
+        except Exception as error:
+            print(f"\n⚠️  Unable to start video for {slug}: {error}")
             recording.video_path = None
             recording.artifacts.video_path = None
 

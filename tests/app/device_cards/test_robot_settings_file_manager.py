@@ -19,10 +19,23 @@ ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_
     order=40,
     requires=ROBOT_DETAIL_REQUIRED,
 )
-def test_file_capacity(screenshot_helper: ScreenshotHelper) -> None:
-    """Capture a page snapshot for File capacity (no open / meter read)."""
-    log_step("Snapshot current page for file capacity")
-    path = screenshot_helper.capture("robot_settings", "file_capacity")
+def test_file_capacity(run_local_app: Page, robot_name: str, screenshot_helper: ScreenshotHelper) -> None:
+    """Open File manager, read the storage meter, and screenshot Robot Storage."""
+    log_step(f"Open File manager storage for '{robot_name}'")
+    files = FileManagerPage(run_local_app, robot_name=robot_name)
+    files.open()
+    capacity = files.capacity()
+    log_step(
+        f"File capacity: {capacity.percent_used}% used, "
+        f"{capacity.percent_available}% available ({capacity.value_text or 'n/a'})"
+    )
+    assert 0 <= capacity.percent_used <= 100
+    assert capacity.percent_used + capacity.percent_available == 100
+    path = screenshot_helper.capture(
+        "robot_settings",
+        "file_capacity",
+        locator=run_local_app.locator('[data-sentry-component="RobotStorage"]'),
+    )
     log_done(f"File capacity snapshot saved ({path.name})")
 
 
@@ -58,7 +71,7 @@ def test_protocol_run_records(run_local_app: Page, robot_name: str) -> None:
     requires=ROBOT_DETAIL_REQUIRED,
 )
 def test_diagnostic_files(run_local_app: Page, robot_name: str) -> None:
-    """List diagnostic files and select the first available row."""
+    """Select a Diagnostic Files filetype and click Download selected."""
     log_step(f"Open File manager diagnostics for '{robot_name}'")
     files = FileManagerPage(run_local_app, robot_name=robot_name)
     files.open()
@@ -68,8 +81,16 @@ def test_diagnostic_files(run_local_app: Page, robot_name: str) -> None:
     if not rows:
         log_done("No diagnostic files present")
         return
-    diagnostics.select(rows[0])
-    log_done(f"Selected diagnostic file '{rows[0]}'")
+    target = (
+        diagnostics.TROUBLESHOOTING_LOGS
+        if diagnostics.TROUBLESHOOTING_LOGS in rows
+        else rows[0]
+    )
+    log_step(f"Select '{target}' and Download selected")
+    files.prepare_downloads()
+    diagnostics.download_file_type(target)
+    files.wait_for_download_success()
+    log_done(f"Downloaded diagnostic file '{target}'")
 
 
 @pytest.mark.workflow(
@@ -80,15 +101,19 @@ def test_diagnostic_files(run_local_app: Page, robot_name: str) -> None:
     requires=ROBOT_DETAIL_REQUIRED,
 )
 def test_download_calibration_logs(run_local_app: Page, robot_name: str) -> None:
-    """Select a calibration-related diagnostic log when one is listed."""
+    """Select Calibration Logs and click Download selected when listed."""
     log_step(f"Open File manager calibration logs for '{robot_name}'")
     files = FileManagerPage(run_local_app, robot_name=robot_name)
     files.open()
     diagnostics = files.diagnostics()
     rows = diagnostics.rows()
-    calibration_rows = [row for row in rows if "calibration" in row.lower() or row.endswith("Logs")]
+    calibration_rows = [row for row in rows if "calibration" in row.lower()]
     log_step(f"Calibration-related rows: {calibration_rows or 'none'}")
     if not calibration_rows:
         pytest.skip("No calibration log rows listed in File manager diagnostics.")
-    diagnostics.select(calibration_rows[0])
-    log_done(f"Selected '{calibration_rows[0]}'")
+    target = calibration_rows[0]
+    log_step(f"Select '{target}' and Download selected")
+    files.prepare_downloads()
+    diagnostics.download_file_type(target)
+    files.wait_for_download_success()
+    log_done(f"Downloaded '{target}'")

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.app_readiness import dismiss_blocking_ui
 from automation.app_helpers.download_collisions import clear_file_manager_downloads
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.robot_settings_page import RobotSettingsPage
@@ -21,6 +22,15 @@ class RunRecord:
     protocol: str
     status: str
     file_count: int
+
+
+@dataclass(frozen=True)
+class StorageCapacity:
+    """Values from the File capacity StorageBar meter."""
+
+    percent_used: int
+    percent_available: int
+    value_text: str
 
 
 class FileSection:
@@ -45,7 +55,9 @@ class FileSection:
         self.select_all_checkbox.check()
 
     def download(self) -> None:
-        BasicButton(self.header, "Download selected").click()
+        button = BasicButton(self.header, "Download selected")
+        expect(button.locator).to_be_visible()
+        button.click()
 
 
 def prepare_file_manager_downloads(robot_name: str) -> None:
@@ -57,8 +69,25 @@ def prepare_file_manager_downloads(robot_name: str) -> None:
     clear_file_manager_downloads(robot_name)
 
 
+def _section_by_title(page: Page, title: str) -> Locator:
+    """Locate a file-management group by its section header title.
+
+    ``ProtocolRunRecords`` (and similar) render a Fragment, so
+    ``data-sentry-component=\"ProtocolRunRecords\"`` never appears in the DOM.
+    The section root is the parent of ``FileManagementSectionHeader``.
+    """
+    header = page.locator('[data-sentry-component="FileManagementSectionHeader"]').filter(
+        has=page.get_by_text(title, exact=True)
+    )
+    expect(header).to_be_visible()
+    return header.locator("xpath=..")
+
+
 class DiagnosticFilesSection(FileSection):
     """Troubleshooting and calibration log selection."""
+
+    TROUBLESHOOTING_LOGS = "Troubleshooting Logs"
+    CALIBRATION_LOGS = "Calibration Logs"
 
     def rows(self) -> list[str]:
         labels = self.root.get_by_text(re.compile(r".+ Logs$"))
@@ -69,15 +98,28 @@ class DiagnosticFilesSection(FileSection):
         expect(label).to_have_count(1)
         RowCheckbox(label.locator("..")).check()
 
+    def download_file_type(self, name: str) -> None:
+        """Check one File type row and click Download selected."""
+        self.select(name)
+        self.download()
+
 
 class ProtocolRunRecordsSection(FileSection):
     """Selectable protocol run records and their file drawers."""
+
+    NO_RECENT_RUNS = "No recent runs"
 
     @property
     def record_roots(self) -> Locator:
         return self.root.locator('[data-sentry-component="ListAccordion"]')
 
+    def is_empty(self) -> bool:
+        empty = self.root.get_by_text(self.NO_RECENT_RUNS, exact=True)
+        return empty.count() > 0 and empty.first.is_visible()
+
     def rows(self) -> list[RunRecord]:
+        if self.is_empty():
+            return []
         result: list[RunRecord] = []
         for index in range(self.record_roots.count()):
             root = self.record_roots.nth(index)
@@ -124,26 +166,74 @@ class ProtocolRunRecordsSection(FileSection):
 class FileManagerPage(AppBasePage):
     """Read storage and manage downloadable robot files."""
 
+    FILE_CAPACITY_LABEL = "File capacity"
+    ROBOT_STORAGE = "Robot Storage"
+    DOWNLOAD_SUCCESS = "Files successfully downloaded"
+    # Robot log zips can take a while over the lab network.
+    DOWNLOAD_TIMEOUT_MS = 120_000
+
     def __init__(self, page: Page, *, robot_name: str) -> None:
         super().__init__(page)
         self.robot_name = robot_name
 
+    @property
+    def file_manager_url(self) -> re.Pattern[str]:
+        return re.compile(
+            rf"#/devices/{re.escape(self.robot_name)}/robot-settings/file-manager"
+        )
+
+    @property
+    def root(self) -> Locator:
+        return self.page.locator('[data-sentry-component="RobotSettingsFileManager"]')
+
     def open(self) -> None:
-        RobotSettingsPage(self.page, robot_name=self.robot_name).navigate(tab=("File manager", "file-manager"))
-        expect(self.page.get_by_text("Robot Storage", exact=True)).to_be_visible()
+        """Open Robot Settings → File manager, preferring a hash deep-link."""
+        dismiss_blocking_ui(self.page)
+        if not self.file_manager_url.search(self.page.url):
+            base = self.page.url.split("#", 1)[0]
+            self.page.goto(f"{base}#/devices/{self.robot_name}/robot-settings/file-manager")
+            try:
+                expect(self.page).to_have_url(self.file_manager_url, timeout=10_000)
+            except AssertionError:
+                RobotSettingsPage(self.page, robot_name=self.robot_name).navigate(
+                    tab=("File manager", "file-manager")
+                )
+        expect(self.root).to_be_visible()
+        expect(self.page.get_by_text(self.ROBOT_STORAGE, exact=True)).to_be_visible()
 
     def prepare_downloads(self) -> None:
         """Remove existing Downloads targets for this robot before save/delete."""
         prepare_file_manager_downloads(self.robot_name)
 
+    def wait_for_download_success(self, *, timeout: float | None = None) -> None:
+        """Wait for the success toast after Download selected."""
+        toast = self.page.get_by_test_id("Toast_success").filter(
+            has_text=self.DOWNLOAD_SUCCESS
+        )
+        expect(toast).to_be_visible(
+            timeout=self.DOWNLOAD_TIMEOUT_MS if timeout is None else timeout
+        )
+
+    def capacity(self) -> StorageCapacity:
+        """Read the Robot Storage File capacity meter."""
+        meter = self.page.get_by_role("meter", name=self.FILE_CAPACITY_LABEL)
+        expect(meter).to_be_visible()
+        used = int(meter.get_attribute("aria-valuenow") or "0")
+        available = max(0, 100 - used)
+        value_text = (meter.get_attribute("aria-valuetext") or "").strip()
+        return StorageCapacity(
+            percent_used=used,
+            percent_available=available,
+            value_text=value_text,
+        )
+
     def diagnostics(self) -> DiagnosticFilesSection:
         root = self.page.locator('[data-sentry-component="DiagnosticsFiles"]').filter(
             has=self.page.get_by_text("Diagnostic Files", exact=True)
         )
+        if root.count() == 0:
+            root = _section_by_title(self.page, "Diagnostic Files")
         return DiagnosticFilesSection(root)
 
     def run_records(self) -> ProtocolRunRecordsSection:
-        root = self.page.locator('[data-sentry-component="ProtocolRunRecords"]').filter(
-            has=self.page.get_by_text("Protocol Run Records", exact=True)
-        )
-        return ProtocolRunRecordsSection(root)
+        return ProtocolRunRecordsSection(_section_by_title(self.page, "Protocol Run Records"))

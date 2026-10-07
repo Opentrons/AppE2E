@@ -15,6 +15,7 @@ from collections.abc import Generator
 import pytest
 from playwright.sync_api import Page
 
+from automation.app_helpers.robot_connection import RobotConnection
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import DevicesPage, RobotSettingsPage
 
@@ -227,12 +228,22 @@ def test_analytics(robot_settings: RobotSettingsPage) -> None:
     requires=ROBOT_DETAIL_REQUIRED,
     cases=(("T69755", "Device Reset"),),
 )
-def test_advanced_device_reset(run_local_app: Page, robot_name: str) -> None:
+def test_advanced_device_reset(
+    run_local_app: Page,
+    robot_name: str,
+    robot_connection: RobotConnection,
+) -> None:
     """T69755: Robot Settings > Advanced > Device Reset (all except SSH keys).
 
-    Restarts the robot; keep this last in the robot_settings group.
+    Restarts the robot; keep this last in the robot_settings group. After the
+    UI confirms, wait for ``/health`` plus a settle period so later suites
+    (file manager, cards, deck config) do not race the reboot.
     """
     log_step("Device Reset: select all except SSH public keys, then restart")
     settings = RobotSettingsPage(run_local_app, robot_name=robot_name)
     settings.reset_all_except_ssh()
     log_done("Device reset confirmed; landed on Devices")
+
+    log_step("Wait for robot /health after device reset, then settle 2 minutes")
+    robot_connection.wait_for_ready_after_reset()
+    log_done("Robot healthy again after device reset")

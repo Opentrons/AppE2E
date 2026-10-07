@@ -15,6 +15,7 @@ from pathlib import Path
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
+from automation.app_helpers.screencast_recorder import CDP_HTTP_ATTR
 
 DEBUG_PORT = 9222
 ODD_CDP_PORT = 9223
@@ -333,6 +334,7 @@ def connect_playwright(
     cdp_url = f"http://{cdp_host}:{cdp_port}"
     print(f"Connecting Playwright to {cdp_url}...")
     browser = playwright.chromium.connect_over_cdp(cdp_url)
+    setattr(browser, CDP_HTTP_ATTR, cdp_url)
     page = _find_app_page(browser)
     try:
         page.bring_to_front()

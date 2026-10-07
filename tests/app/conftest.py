@@ -26,6 +26,7 @@ from automation.app_helpers.reporting import (
     slugify_nodeid,
     start_test_recording,
     stop_test_recording,
+    video_embed_html,
 )
 from automation.app_helpers.robot_connection import RobotConnection, resolve_robot_ip
 from automation.app_helpers.robot_profiles import (
@@ -92,15 +93,20 @@ def _connect_robot_for_tests(
     *,
     cli_ip: str | None = None,
 ) -> RobotConnection:
-    """Connect to USB, localhost, or Wi-Fi robot and verify ``/health``."""
+    """Connect to USB, localhost, or Wi-Fi robot and verify ``/health``.
+
+    USB connections also keep an explicit ``ROBOT_IP`` / ``--robot-ip`` when
+    set, so ``wait_for_ready_after_reset`` can recover over either transport.
+    """
     if profile is not None and not profile.require_hardware_connection:
         connection = RobotConnection(ip="127.0.0.1")
         connection("/health")
         return connection
 
+    explicit_ip = (cli_ip or "").strip() or os.environ.get("ROBOT_IP", "").strip() or None
     usb_port = find_opentrons_usb_port()
     if usb_port is not None:
-        connection = RobotConnection(usb_port=usb_port)
+        connection = RobotConnection(usb_port=usb_port, ip=explicit_ip)
         connection("/health")
         return connection
 
@@ -265,25 +271,14 @@ def _headed_bring_app_to_front(request: pytest.FixtureRequest, run_local_app: Pa
 
 @pytest.fixture(autouse=True)
 def _record_test_artifacts(request: pytest.FixtureRequest, run_local_app: Page) -> Generator[None, None, None]:
-    """Record per-test Playwright trace and optional headed screencast video.
-
-    Calibration uses beginning/middle/end screenshots instead of video (see
-    ``tests/app/calibration/conftest.py``). Device-cards records one suite video.
-    """
+    """Record a per-test trace and, in headed runs, an mp4 of the whole test."""
     slug = slugify_nodeid(request.node.nodeid)
     headed = is_headed_run(request.config)
-    uses_suite_video = request.node.get_closest_marker("device_cards") is not None
-    is_calibration = request.node.get_closest_marker("calibration") is not None
-    # Suite video (device_cards) and per-test screencast both use CDP Page.startScreencast.
-    # Tracing screenshots start a second screencast and starve the recorder — keep them off
-    # whenever headed video is in play.
-    headed_video = headed and not is_calibration
     recording = start_test_recording(
         context=run_local_app.context,
         page=run_local_app,
         slug=slug,
-        record_screencast=headed_video and not uses_suite_video,
-        tracing_screenshots=not headed_video,
+        record_screencast=headed,
     )
     yield
     artifacts = stop_test_recording(run_local_app.context, recording)
@@ -328,9 +323,7 @@ def _artifact_extras(item: pytest.Item) -> list:
         if name == "trace_path":
             report_extras.append(html_extras.url(relative, name="Playwright trace (open in trace viewer)"))
         elif name == "video_path":
-            report_extras.append(
-                html_extras.html(f'<video width="640" controls><source src="{relative}" type="video/webm"></video>')
-            )
+            report_extras.append(html_extras.html(video_embed_html(relative, path)))
             report_extras.append(html_extras.url(relative, name="Download video"))
         elif name in _SCREENSHOT_PROPERTY_LABELS:
             label = _SCREENSHOT_PROPERTY_LABELS[name]

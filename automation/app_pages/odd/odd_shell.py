@@ -2,6 +2,7 @@
 
 Every ODD screen inherits this so a test can move between dashboard,
 Protocols, Instruments, Settings, and the kebab menu with one call.
+Child screens use ``back_button`` for the ChildNavigation chevron.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import re
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_pages.base_app.app_base_page import AppBasePage
+from automation.app_pages.odd.odd_readings import OddReadings, readings_for
 
 
 class OddShell(AppBasePage):
@@ -25,6 +27,11 @@ class OddShell(AppBasePage):
     def __init__(self, page: Page) -> None:
         """Bind the Playwright page for the remote ODD window."""
         super().__init__(page)
+
+    @property
+    def readings(self) -> OddReadings:
+        """Values already read from this ODD, shared by every screen object."""
+        return readings_for(self.page)
 
     @property
     def dashboard_link(self) -> Locator:
@@ -51,6 +58,15 @@ class OddShell(AppBasePage):
         """Top-nav overflow (kebab) menu button."""
         return self.page.get_by_role("button", name="overflow menu button")
 
+    @property
+    def back_button(self) -> Locator:
+        """ChildNavigation back button.
+
+        ``aria-label`` is "Back to previous page" and stays English when the
+        UI language changes. The chevron path is ``aria-roledescription="back"``.
+        """
+        return self.page.get_by_test_id("ChildNavigation_Back_Button")
+
     def expect_alive(self, *, timeout: float = 15_000) -> None:
         """Assert the attached page is the Opentrons ODD UI (title + renderer URL)."""
         expect(self.page).to_have_title(re.compile(r"opentrons", re.IGNORECASE), timeout=timeout)
@@ -63,11 +79,20 @@ class OddShell(AppBasePage):
             next_btn.first.click()
             expect(next_btn).to_have_count(0, timeout=10_000)
 
+    def press(self, target: Locator) -> None:
+        """Activate a control with a DOM click.
+
+        A CDP pointer click on this touchscreen does not reach the React
+        handler. ``dispatch_event('click')`` does.
+        """
+        expect(target).to_be_visible(timeout=15_000)
+        target.scroll_into_view_if_needed()
+        target.dispatch_event("click")
+
     def _follow(self, link: Locator, url: re.Pattern[str], *, timeout: float = 15_000) -> None:
         """Click a top-nav link and wait until the hash route matches."""
         self.dismiss_welcome_modal_if_present()
-        expect(link).to_be_visible(timeout=timeout)
-        link.click()
+        self.press(link)
         expect(self.page).to_have_url(url, timeout=timeout)
         self.dismiss_welcome_modal_if_present()
 
@@ -82,6 +107,35 @@ class OddShell(AppBasePage):
     def open_instruments(self) -> None:
         """Open the Instruments dashboard from the top nav."""
         self._follow(self.instruments_nav, self.INSTRUMENTS_URL)
+
+    def log_in_if_locked(self, username: str, password: str) -> None:
+        """Open the lock-screen login and sign in when access control is on.
+
+        The logged-out dialog covers the whole touchscreen, so nav clicks never
+        land until this returns.
+        """
+        overlay = self.page.get_by_role("dialog", name="Logged out")
+        username_input = self.page.locator('input[name="username"]')
+        password_input = self.page.locator('input[name="password"]')
+        overlay_open = overlay.count() > 0 and overlay.is_visible()
+        username_open = username_input.count() > 0 and username_input.is_visible()
+        password_open = password_input.count() > 0 and password_input.is_visible()
+        if not overlay_open and not username_open and not password_open:
+            return
+        if overlay_open:
+            # A pointer click is swallowed on the way to this overlay. A DOM click
+            # still reaches the React handler that opens the login screen.
+            overlay.dispatch_event("click")
+        primary = self.page.get_by_test_id("ChildNavigation_Primary_Button").last
+        if not password_open:
+            expect(username_input).to_be_visible(timeout=15_000)
+            username_input.fill(username)
+            primary.dispatch_event("click")
+        expect(password_input).to_be_visible(timeout=15_000)
+        password_input.fill(password)
+        primary.dispatch_event("click")
+        expect(overlay).to_have_count(0, timeout=15_000)
+        expect(password_input).to_have_count(0, timeout=15_000)
 
     def open_settings(self) -> None:
         """Open Robot Settings from the top nav."""

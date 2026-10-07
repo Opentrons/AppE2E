@@ -55,6 +55,9 @@ def pytest_runtest_makereport(item: Item, call: pytest.CallInfo) -> Generator[No
 
 def pytest_configure(config: Any) -> None:
     """Create today's test-results day folder and point the HTML report there."""
+    from run_config import is_headed_run, publish_playwright_headless_mode
+
+    publish_playwright_headless_mode(headless=not is_headed_run(config))
     day_dir = ensure_test_results_dir()
     config.option.htmlpath = str(report_html_path())
     output = getattr(config.option, "output", None)

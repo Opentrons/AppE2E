@@ -34,7 +34,7 @@ _SKIP_PROMPT_ENV = "SKIP_FLEX_SETUP_PROMPT"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Tag calibration-suite tests so app fixtures skip per-test video."""
+    """Tag calibration-suite tests. Headed runs still record a per-test video."""
     marker = pytest.mark.calibration
     for item in items:
         nodeid = item.nodeid.replace("\\", "/")
@@ -96,7 +96,7 @@ def _calibration_milestone_photos(
     request: pytest.FixtureRequest,
     run_local_app: Page,
 ) -> Generator[None, None, None]:
-    """Capture beginning / middle / end screenshots; no per-test video for this suite."""
+    """Capture beginning / middle / end screenshots. Headed runs also record video."""
     slug = slugify_nodeid(request.node.nodeid)
     session = bind_calibration_photos(run_local_app, slug)
     try:

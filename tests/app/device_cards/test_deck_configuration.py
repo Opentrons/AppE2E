@@ -10,12 +10,13 @@ from automation.app_pages import DeckConfigurationPage
 
 ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list"
 
-EXPECTED_EMPTY_DECK_LABELS = {
+EXPECTED_STANDARD_DECK_LABELS = {
     "Temperature",
     "Heater-Shaker",
     "Thermocycler",
     "Mag",
     "Absorbance",
+    "Stage",
     "Stacker",
     "Waste",
 }
@@ -33,7 +34,7 @@ def test_deck_configuration(
     robot_name: str,
     device_details_tabs: bool,
 ) -> None:
-    """If the deck is empty, configure the standard QA lab layout; otherwise leave it."""
+    """Ensure the standard QA lab layout, clearing factory-default trash on A3 if needed."""
     if not device_details_tabs:
         pytest.skip("Deck Configuration tab requires the Device Details tabs layout.")
 
@@ -44,17 +45,15 @@ def test_deck_configuration(
     labels = deck.configured_module_labels()
     log_step(f"Configured on deck ({len(labels)}): {labels or 'none'}")
 
-    if labels:
-        log_done(f"Deck already configured — leaving as-is ({labels})")
-        return
-
-    log_step("Deck empty — configure standard lab layout")
-    deck.configure_standard_empty_deck()
+    log_step("Ensure standard QA lab layout (clear Trash bin on A3 if present)")
+    added = deck.configure_standard_deck()
+    log_done(f"Deck configured — added {added or 'nothing (already complete)'}")
 
     after_labels = deck.configured_module_labels()
     after = set(after_labels)
     log_step(f"Configured after setup: {after_labels}")
-    missing = EXPECTED_EMPTY_DECK_LABELS - after
-    assert not missing, f"Missing configured labels after empty-deck setup: {sorted(missing)}"
+    missing = EXPECTED_STANDARD_DECK_LABELS - after
+    assert not missing, f"Missing configured labels after standard deck setup: {sorted(missing)}"
     assert after_labels.count("Stacker") == 2
-    log_done("Standard empty-deck layout configured")
+    assert "Trash bin" not in after
+    log_done("Standard deck layout configured")

@@ -226,10 +226,27 @@ class ListAccordion:
 
 
 class RowCheckbox:
-    """Tri-state CheckboxBasic, always resolved inside a caller-provided scope."""
+    """Tri-state CheckboxBasic, always resolved inside a caller-provided scope.
+
+    CheckboxBasic keeps a visually hidden 1×1 clipped ``input``; Playwright cannot
+    actionably click it. Clicks go to the ``CheckboxBasic`` label (or its visible
+    box); state is still read from the input's ``aria-checked``.
+    """
 
     def __init__(self, scope: Locator) -> None:
+        self.scope = scope
         self.locator = scope.locator('input[type="checkbox"]').first
+
+    @property
+    def control(self) -> Locator:
+        """Visible click target for CheckboxBasic."""
+        label = self.scope.locator('[data-sentry-component="CheckboxBasic"]')
+        if label.count() > 0:
+            return label.first
+        box = self.locator.locator("xpath=following-sibling::*[1]")
+        if box.count() > 0:
+            return box.first
+        return self.locator
 
     def state(self) -> CheckboxState:
         value = self.locator.get_attribute("aria-checked")
@@ -241,12 +258,12 @@ class RowCheckbox:
 
     def check(self) -> None:
         if self.state() != "checked":
-            self.locator.click()
+            self.control.click()
         expect(self.locator).to_have_attribute("aria-checked", "true")
 
     def uncheck(self) -> None:
         if self.state() != "unchecked":
-            self.locator.click()
+            self.control.click()
         expect(self.locator).to_have_attribute("aria-checked", "false")
 
 

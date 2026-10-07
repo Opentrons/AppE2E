@@ -9,6 +9,7 @@ from playwright.sync_api import Page, expect
 
 from automation.app_helpers.app_readiness import click_when_ui_ready, dismiss_blocking_ui
 from automation.app_helpers.left_nav import link
+from automation.app_helpers.list_scroll import scroll_until_visible
 
 LOCALHOST = "localhost"
 ROBOT_SERVER_PORT = 31950
@@ -47,25 +48,44 @@ def ensure_localhost_robot_discovered(
     timeout: float = 90_000,
 ) -> None:
     """Add localhost to manual discovery if the dev robot card is not visible yet."""
-    robot_card = page.locator(f"#RobotCard_{robot_name}_robotImage")
-    if robot_card.count() > 0 and robot_card.first.is_visible():
+    ensure_robot_ip_discovered(page, robot_name=robot_name, host=host, timeout=timeout)
+
+
+def ensure_robot_ip_discovered(
+    page: Page,
+    *,
+    robot_name: str,
+    host: str,
+    timeout: float = 90_000,
+    force: bool = False,
+) -> None:
+    """Add a robot IP to manual discovery and wait for its device card."""
+    robot_card = page.get_by_test_id(f"RobotCard_{robot_name}_overflowMenu")
+    if not force and robot_card.count() > 0 and robot_card.first.is_visible():
         return
 
-    settings_link = page.get_by_test_id("Navbar_settingsLink")
+    settings_link = page.get_by_role("button", name="App Settings", exact=True).or_(
+        page.get_by_test_id("Navbar_settingsLink")
+    ).first
+    expect(settings_link).to_be_visible(timeout=60_000)
     click_when_ui_ready(page, settings_link)
     page.get_by_role("button", name="Set up connection").click()
-    expect(page.get_by_test_id("Slideout_title_Connect to a Robot via IP Address")).to_be_visible()
+    expect(page.get_by_text("Add IP Address or Hostname", exact=True)).to_be_visible()
 
     if page.get_by_test_id("ip-hostname").filter(has_text=host).count() == 0:
         page.get_by_test_id("manual-ip-hostname-input").fill(host)
         page.get_by_role("button", name="Add").click()
 
-    close = page.get_by_role("button", name="exit").or_(
-        page.get_by_test_id("Slideout_icon_close_Connect to a Robot via IP Address")
-    )
-    if close.count() > 0 and close.first.is_visible():
-        close.first.click(force=True)
+    done = page.get_by_role("button", name="Done", exact=True)
+    if done.count() > 0 and done.first.is_visible():
+        done.first.click()
+    else:
+        page.keyboard.press("Escape")
 
     dismiss_blocking_ui(page)
     click_when_ui_ready(page, link(page, "Devices"))
-    expect(robot_card.first).to_be_visible(timeout=timeout)
+    scroll_until_visible(
+        page,
+        robot_card.first,
+        not_found_message=f"Robot {robot_name!r} did not appear on Devices after adding {host}",
+    )

@@ -67,6 +67,13 @@ make test-odd-headed PYTEST_ARGS="--robot-ip 10.14.19.200"
 - Re-run last failures: `make troubleshoot`
 - Agents: use `.cursor/skills/app-e2e/` when working on app tests.
 
+## What the tests cover
+
+Plain-language flows, left-to-right diagrams, and the list of what is still open. Written to paste into Confluence or Google Docs.
+
+- Desktop app: [TEST_FLOWS_APP.md](TEST_FLOWS_APP.md)
+- On-device screen: [TEST_FLOWS_ODD.md](TEST_FLOWS_ODD.md)
+
 ## Directory layout
 
 - `automation/app_pages/` — Desktop app + ODD page objects

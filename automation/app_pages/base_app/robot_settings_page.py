@@ -31,8 +31,6 @@ class RobotSettingsPage(AppBasePage):
     UPDATE_ROBOT_SOFTWARE = "Update robot software manually with a local file (.zip)"
     DEVICE_RESET = "Device reset"
     REINSTALL = "reinstall"
-    # App renders this label lowercase (RobotServerVersion).
-    UP_TO_DATE = "up to date"
     RENAME_ROBOT = "Rename robot"
     CHOOSE_RESET_SETTINGS = "Choose reset settings"
     RENAME_ROBOT_SLIDEOUT = "Rename Robot"
@@ -364,9 +362,7 @@ class RobotSettingsPage(AppBasePage):
     def validate_advanced_robot_server_reinstall(self) -> None:
         """T69756: Advanced > Robot Server Reinstall."""
         self.navigate(tab=("Advanced", "advanced"))
-        reinstall = self.page.get_by_role("button", name=self.REINSTALL)
-        up_to_date = self.page.get_by_text(self.UP_TO_DATE, exact=True)
-        expect(reinstall.or_(up_to_date)).to_be_visible()
+        expect(self.page.get_by_role("button", name=self.REINSTALL)).to_be_visible()
 
     def validate_analytics(self) -> None:
         """Analytics: Camera usage settings on the Camera tab (requires camera on)."""

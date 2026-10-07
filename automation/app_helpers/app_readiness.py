@@ -34,16 +34,22 @@ def click_when_ui_ready(page: Page, locator: Locator, *, timeout: float = 15_000
 
 
 def close_visible_slideouts(page: Page, *, deadline_s: float = 5.0, pause_ms: int = 400) -> bool:
-    """Close visible slideouts. Returns True if any close was attempted."""
+    """Close on-screen slideouts. Returns True if any close was attempted.
+
+    Collapsed slideouts stay mounted (for example the protocol import panel) and
+    keep an ``exit`` button translated off the right edge. Playwright still
+    reports that button as visible, so a visibility check alone spends the whole
+    deadline clicking a control that is not on screen.
+    """
     deadline = time.time() + deadline_s
     close_buttons = page.locator(SLIDEOUT_CLOSE_SELECTOR)
     closed_any = False
 
     while time.time() < deadline:
-        visible_indexes = [index for index in range(close_buttons.count()) if close_buttons.nth(index).is_visible()]
-        if not visible_indexes:
+        on_screen = [index for index in range(close_buttons.count()) if _is_on_screen(page, close_buttons.nth(index))]
+        if not on_screen:
             return closed_any
-        close = close_buttons.nth(visible_indexes[0])
+        close = close_buttons.nth(on_screen[0])
         closed_any = True
         # Slideout close buttons are fixed-position; Playwright may treat them as
         # outside the viewport even when visible.
@@ -74,11 +80,12 @@ def click_visible_overlays(page: Page, *, timeout_ms: float = 1_000) -> bool:
 def wait_for_overlays_hidden(page: Page, *, timeout: float) -> None:
     """Wait until blocking overlay elements are no longer visible."""
     overlays = page.locator(OVERLAY_SELECTOR)
-    if overlays.count() == 0:
+    visible_indexes = [index for index in range(overlays.count()) if overlays.nth(index).is_visible()]
+    if not visible_indexes:
         return
 
-    per_overlay_timeout = max(timeout / overlays.count(), 1_000)
-    for index in range(overlays.count()):
+    per_overlay_timeout = max(timeout / len(visible_indexes), 1_000)
+    for index in visible_indexes:
         expect(overlays.nth(index)).to_be_hidden(timeout=per_overlay_timeout)
 
 
@@ -86,9 +93,49 @@ def _dismiss_language_modals(page: Page) -> None:
     """Click through optional language-selection modals on first launch."""
     for button_name in LANGUAGE_MODAL_BUTTONS:
         button = page.get_by_role("button", name=button_name)
-        if button.count() == 0:
-            continue
-        try:
-            button.first.click(timeout=2_000)
-        except Exception:
-            continue
+        for index in range(button.count()):
+            target = button.nth(index)
+            # Hidden matches (a wizard "Continue" left in the DOM) must not burn
+            # the click timeout once the app is already past this modal.
+            if not target.is_visible():
+                continue
+            try:
+                target.click(timeout=2_000)
+            except Exception:
+                continue
+            break
+
+
+def _is_on_screen(page: Page, locator: Locator) -> bool:
+    """Return True when ``locator`` is visible and its center is in the viewport."""
+    if not locator.is_visible():
+        return False
+    box = locator.bounding_box()
+    if box is None or box["width"] <= 0 or box["height"] <= 0:
+        return False
+    viewport = _viewport_size(page)
+    if viewport is None:
+        return True
+    width, height = viewport
+    center_x = box["x"] + box["width"] / 2
+    center_y = box["y"] + box["height"] / 2
+    return 0 <= center_x < width and 0 <= center_y < height
+
+
+def _viewport_size(page: Page) -> tuple[float, float] | None:
+    """Return the layout viewport, including CDP targets with no Playwright viewport."""
+    viewport = page.viewport_size
+    if viewport is not None:
+        width = float(viewport["width"])
+        height = float(viewport["height"])
+        if width > 0 and height > 0:
+            return width, height
+    try:
+        size = page.evaluate("() => ({ width: window.innerWidth, height: window.innerHeight })")
+    except Exception:
+        return None
+    width = float(size.get("width") or 0)
+    height = float(size.get("height") or 0)
+    if width <= 0 or height <= 0:
+        return None
+    return width, height

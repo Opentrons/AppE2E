@@ -49,17 +49,37 @@ class OddProtocolsPage(OddShell):
         expect(self.protocol_cards.first).to_be_visible(timeout=15_000)
         expect(self.page.get_by_role("button", name="Quick transfer")).to_be_visible()
 
+    def expect_protocols(self, protocol_names: tuple[str, ...]) -> None:
+        """Assert exact protocol titles are visible on the ODD Protocols page."""
+        for protocol_name in protocol_names:
+            expect(self.page.get_by_text(protocol_name, exact=True).first).to_be_visible(timeout=120_000)
+
+    def wait_for_protocol_inventory(self) -> None:
+        """Wait until the Protocols page has rendered cards, pins, or the empty state."""
+        loaded = self.protocol_cards.first.or_(self.page.get_by_text("Pinned Protocols", exact=True)).or_(
+            self.page.get_by_text("No protocols to show!", exact=True)
+        )
+        expect(loaded.first).to_be_visible(timeout=30_000)
+
+    def missing_protocols(self, protocol_names: tuple[str, ...]) -> tuple[str, ...]:
+        """Return protocol titles that are not on the Protocols page."""
+        missing: list[str] = []
+        for protocol_name in protocol_names:
+            if self.page.get_by_text(protocol_name, exact=True).count() == 0:
+                missing.append(protocol_name)
+        return tuple(missing)
+
     def exercise_sorting(self) -> None:
         """Click each sort header and keep the protocol list visible (C44420)."""
         for label in self.SORT_LABELS:
             btn = self.page.get_by_role("button", name=label)
             expect(btn).to_be_visible()
-            btn.click()
+            self.press(btn)
             expect(self.protocol_cards.first).to_be_visible(timeout=10_000)
             if self.shots is not None:
                 self.shots.capture("protocol_sorting", f"{self._slug(label)}_asc")
             # Toggle a second time to exercise reverse sort direction.
-            btn.click()
+            self.press(btn)
             expect(self.protocol_cards.first).to_be_visible(timeout=10_000)
             if self.shots is not None:
                 self.shots.capture("protocol_sorting", f"{self._slug(label)}_desc")
@@ -138,6 +158,14 @@ class OddProtocolsPage(OddShell):
         """Assert the Pinned Protocols carousel is present after a pin."""
         expect(self.page.get_by_text("Pinned Protocols", exact=True)).to_be_visible(timeout=15_000)
         pinned = self.page.get_by_test_id(re.compile(r"^(full|half|regular)_pinned_protocol_card$"))
+        expect(pinned.first).to_be_visible(timeout=10_000)
+
+    def expect_protocol_pinned(self, protocol_name: str) -> None:
+        """Assert ``protocol_name`` is shown in the Pinned Protocols carousel."""
+        self.expect_pinned_section()
+        pinned = self.page.get_by_test_id(re.compile(r"^(full|half|regular)_pinned_protocol_card$")).filter(
+            has_text=protocol_name
+        )
         expect(pinned.first).to_be_visible(timeout=10_000)
 
     def back_to_protocols(self) -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from playwright.sync_api import Locator, Page, expect
 
@@ -67,6 +68,56 @@ class ProtocolsPage(AppBasePage):
                 "Do you have the protocol loaded?"
             ),
         )
+
+    def has_protocol(self, protocol_name: str) -> bool:
+        """Return whether an exact protocol title is present on the landing page."""
+        self.navigate_landing()
+        title = self.page.get_by_text(protocol_name, exact=True)
+        return title.count() > 0
+
+    def import_protocol(self, protocol_name: str, protocol_path: Path) -> None:
+        """Import one Python protocol and wait for its analyzed display title."""
+        path = Path(protocol_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Protocol file not found: {path}")
+
+        self.navigate_landing()
+        self.page.get_by_role("button", name="Import", exact=True).click()
+        file_input = self.page.get_by_test_id("file_input")
+        expect(file_input).to_be_attached()
+        file_input.set_input_files(str(path.resolve()))
+        expect(self.page.get_by_text(protocol_name, exact=True).first).to_be_visible(timeout=120_000)
+
+    def ensure_protocol_imported(self, protocol_name: str, protocol_path: Path) -> bool:
+        """Import the protocol only when its exact display title is absent."""
+        if self.has_protocol(protocol_name):
+            return False
+        self.import_protocol(protocol_name, protocol_path)
+        return True
+
+    def send_protocol_to_flex(self, protocol_name: str, robot_name: str) -> None:
+        """Send a protocol from its overflow menu to the named Flex."""
+        self.page.evaluate("() => window.resizeTo(1680, 1100)")
+        self.choose_overflow_action(protocol_name, "send_to_flex")
+        send = self.page.get_by_role("button", name="Send", exact=True)
+        expect(send).to_be_visible(timeout=15_000)
+        # A collapsed robot slideout stays mounted off-screen and also contains the
+        # robot name. Stay inside the open Send slideout.
+        slideout = send.locator(
+            "xpath=ancestor::*[.//h2[normalize-space()='Send protocol to Opentrons Flex']][1]"
+        )
+        robot = slideout.get_by_text(robot_name, exact=True).first
+        expect(robot).to_be_visible(timeout=30_000)
+        card = robot.locator("xpath=ancestor::div[3]")
+        card.evaluate("element => element.scrollIntoView({block: 'center', inline: 'nearest'})")
+        box = card.bounding_box()
+        if box is None:
+            raise RuntimeError(f"Robot card for {robot_name!r} has no bounding box")
+        self.page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        expect(send).to_be_enabled(timeout=30_000)
+        send.click()
+        success = self.page.get_by_text(re.compile(rf"Successfully sent.*{re.escape(protocol_name)}"))
+        expect(success.first).to_be_visible(timeout=120_000)
 
     def open(self, protocol_name: str) -> None:
         """Open a protocol detail page from the landing list."""

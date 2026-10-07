@@ -7,6 +7,7 @@ from typing import Literal
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_pages.odd.odd_drop_tip_wizard import OddDropTipWizard
 from automation.app_pages.odd.odd_shell import OddShell
 
 Mount = Literal["left", "right", "extension"]
@@ -61,8 +62,7 @@ class OddInstrumentsPage(OddShell):
     def open_mount(self, mount: Mount) -> None:
         """Open a mount's detail screen."""
         button = self.mount_button(mount)
-        expect(button).to_be_visible(timeout=15_000)
-        button.click()
+        self.press(button)
         expect(self.page).to_have_url(re.compile(rf"#?/instruments/{mount}"), timeout=15_000)
 
     def back(self) -> None:
@@ -71,9 +71,7 @@ class OddInstrumentsPage(OddShell):
         The header button's accessible name is the instrument (for example
         "Flex 96-Channel 1000 µL"). The back chevron marks that control.
         """
-        back = self.page.get_by_role("button").filter(
-            has=self.page.locator('[aria-roledescription="back"]')
-        )
+        back = self.page.get_by_role("button").filter(has=self.page.locator('[aria-roledescription="back"]'))
         expect(back).to_be_visible(timeout=15_000)
         back.click()
         expect(self.page).to_have_url(self.INSTRUMENTS_URL, timeout=15_000)
@@ -103,22 +101,82 @@ class OddInstrumentsPage(OddShell):
         if calibrate.count() > 0 and calibrate.first.is_visible():
             calibrate.first.click()
         else:
-            overflow = self.page.get_by_role("button", name="overflow menu button")
-            expect(overflow).to_be_visible(timeout=15_000)
-            overflow.click()
+            self.open_mount_overflow()
             recalibrate = self.page.get_by_role("button", name=re.compile(r"recalibrate", re.I))
             expect(recalibrate.first).to_be_visible(timeout=15_000)
             recalibrate.first.click()
         expect(self.page.get_by_role("button", name="Move gantry to front")).to_be_visible(timeout=15_000)
+
+    def mount_overflow_button(self) -> Locator:
+        """Overflow on the open pipette detail.
+
+        The button is labeled "overflow menu button". The icon path inside it
+        is ``aria-roledescription="overflow-btn-touchscreen"``. Grippers do not
+        render this control.
+        """
+        return self.page.get_by_role("button", name="overflow menu button").filter(
+            has=self.page.locator('[aria-roledescription="overflow-btn-touchscreen"]')
+        )
+
+    def open_mount_overflow(self) -> None:
+        """Open the pipette overflow and wait until Drop tips is visible.
+
+        A calibrated pipette also shows Recalibrate. Home gantry is not in this
+        menu; that control is the top-nav kebab.
+        """
+        button = self.mount_overflow_button()
+        self.press(button)
+        expect(self.page.get_by_role("button", name="Drop tips")).to_be_visible(timeout=10_000)
+
+    def drop_tips(self) -> None:
+        """Start Drop tips from the open pipette and stop on the first wizard screen.
+
+        The gantry does not move until a later step in that wizard.
+        """
+        self.open_mount_overflow()
+        self.press(self.page.get_by_role("button", name="Drop tips"))
+        prompt = self.page.get_by_text("Before you begin, do you need to preserve aspirated liquid?")
+        heading = self.page.get_by_text("Documentation required", exact=True)
+        expect(heading.or_(prompt).first).to_be_visible(timeout=20_000)
+        OddDropTipWizard(self.page).confirm_audit_note_if_needed()
+        expect(prompt).to_be_visible(timeout=30_000)
+
+    def drop_tips_in_waste_chute(self) -> None:
+        """Blow out into the waste chute, drop the tip there, and exit the wizard.
+
+        The pipette detail screen must already be open, unless the Drop tips
+        wizard is already on screen. The gantry moves during blowout, tip drop,
+        and the home that follows Exit.
+        """
+        self._start_drop_tip_wizard().blow_out_and_drop_in_waste_chute()
+
+    def drop_tips_without_blowout(self) -> None:
+        """Skip blowout, drop the tip in the waste chute, and exit.
+
+        Uses "No, proceed to tip removal" on the first wizard screen.
+        """
+        self._start_drop_tip_wizard().drop_in_waste_chute_without_blowout()
+
+    def _start_drop_tip_wizard(self) -> OddDropTipWizard:
+        """Open Drop tips, or continue one that is already on screen."""
+        wizard = OddDropTipWizard(self.page)
+        prompt = self.page.get_by_text("Before you begin, do you need to preserve aspirated liquid?")
+        heading = self.page.get_by_text("Documentation required", exact=True)
+        getting_ready = self.page.get_by_text(re.compile(r"^Getting ready"))
+        already_open = prompt.or_(heading).or_(getting_ready)
+        if already_open.count() > 0 and already_open.first.is_visible():
+            wizard.confirm_audit_note_if_needed()
+            expect(prompt).to_be_visible(timeout=30_000)
+        else:
+            self.drop_tips()
+        return wizard
 
     def move_gantry_to_front(self) -> None:
         """Move the gantry to the front and wait for the attach-probe step."""
         move_gantry = self.page.get_by_role("button", name="Move gantry to front")
         expect(move_gantry).to_be_visible(timeout=15_000)
         move_gantry.click()
-        expect(self.page.get_by_role("button", name="Begin calibration")).to_be_visible(
-            timeout=_GANTRY_TIMEOUT_MS
-        )
+        expect(self.page.get_by_role("button", name="Begin calibration")).to_be_visible(timeout=_GANTRY_TIMEOUT_MS)
 
     def begin_calibration(self) -> None:
         """Begin calibration. The calibration probe must already be on the pipette."""
@@ -170,6 +228,7 @@ class OddInstrumentsPage(OddShell):
         value = item.get_attribute("value")
         if value is None:
             raise AssertionError(f"Instrument info '{label}' has no value")
+        self.readings.instrument[label] = value
         return value
 
     def last_calibrated(self) -> str:
@@ -183,5 +242,3 @@ class OddInstrumentsPage(OddShell):
     def serial_number(self) -> str:
         """Serial number on the open mount."""
         return self.info_value("serial number")
-
-
