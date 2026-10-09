@@ -129,14 +129,16 @@ class RobotConnection:
         *,
         timeout_s: float = DEVICE_RESET_READY_TIMEOUT_S,
         poll_interval_s: float = DEVICE_RESET_POLL_INTERVAL_S,
-    ) -> None:
-        """Poll ``/health`` over USB and/or Wi-Fi until the robot responds."""
+    ) -> dict[str, Any]:
+        """Poll ``/health`` over USB and/or Wi-Fi until the robot responds.
+
+        Returns the successful ``/health`` JSON payload.
+        """
         deadline = time.time() + timeout_s
         last_error: Exception | None = None
         while time.time() < deadline:
             try:
-                self._probe_health()
-                return
+                return self._probe_health()
             except Exception as exc:
                 last_error = exc
                 time.sleep(poll_interval_s)
@@ -151,12 +153,14 @@ class RobotConnection:
         downtime_wait_s: float = DEVICE_RESET_DOWNTIME_WAIT_S,
         poll_interval_s: float = DEVICE_RESET_POLL_INTERVAL_S,
         settle_s: float = DEVICE_RESET_SETTLE_S,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Wait for restart downtime, ``/health`` on Wi-Fi or USB, then settle.
 
         Works for both transports: probes USB serial (with port rediscovery) and
         the configured Wi-Fi IP each poll. ``settle_s`` covers app-side
         rediscovery after the API is back (default 2 minutes).
+
+        Returns the ``/health`` payload from the first successful post-reset probe.
         """
         deadline = time.time() + timeout_s
         down_deadline = time.time() + downtime_wait_s
@@ -167,9 +171,10 @@ class RobotConnection:
             except Exception:
                 break
         remaining = max(deadline - time.time(), poll_interval_s)
-        self.wait_until_healthy(timeout_s=remaining, poll_interval_s=poll_interval_s)
+        health = self.wait_until_healthy(timeout_s=remaining, poll_interval_s=poll_interval_s)
         if settle_s > 0:
             time.sleep(settle_s)
+        return health
 
 
 def _explicit_robot_ip(*, cli_ip: str | None = None) -> str | None:

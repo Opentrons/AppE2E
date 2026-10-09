@@ -25,7 +25,7 @@ DECK_CONFIG_FOR_MODULES = (
 )
 
 
-@pytest.mark.workflow(group="run_setup", section="Calibration", label="Review calibration status", order=70)
+@pytest.mark.workflow(group="calibration", section="Status", label="Review calibration status", order=10)
 def test_calibration_flow(run_local_app: Page, robot_name: str) -> None:
     """List pipette, gripper, and module calibration status on Robot Settings."""
     log_step(f"Open Robot Settings Calibration for '{robot_name}'")
@@ -47,10 +47,10 @@ def test_calibration_flow(run_local_app: Page, robot_name: str) -> None:
 
 
 @pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
+    group="calibration",
+    section="Status",
     label="Open calibration overflow menus",
-    order=80,
+    order=20,
 )
 def test_calibration_overflow_menu(run_local_app: Page, robot_name: str) -> None:
     """Open overflow menu for each instrument that shows Not calibrated."""
@@ -68,10 +68,11 @@ def test_calibration_overflow_menu(run_local_app: Page, robot_name: str) -> None
 
 
 @pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
+    group="calibration",
+    section="Pipette",
     label="Calibrate 96-channel pipette",
-    order=90,
+    order=30,
+    cases=(("T69746", "Pipette Calibrations"),),
 )
 def test_96_channel_calibration(run_local_app: Page, robot_name: str) -> None:
     """Run the full Flex 96-channel pipette calibration wizard."""
@@ -85,20 +86,23 @@ def test_96_channel_calibration(run_local_app: Page, robot_name: str) -> None:
 
 
 @pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
+    group="calibration",
+    section="Deck check",
     label="Check deck configuration for modules",
-    order=95,
+    order=40,
 )
 def test_deck_configuration_before_modules(
     run_local_app: Page,
     robot_name: str,
     device_details_tabs: bool,
 ) -> None:
-    """Verify HS / Temp / TC deck slots before Module Wizard calibration.
+    """Verify deck slots before Module Wizard calibration.
 
-    Empty deck → standard QA layout. Already configured but missing a calibration
-    module → fail with the current labels.
+    Missing modules are added on their standard slots (Temperature D1, Heater-Shaker
+    C1, Thermocycler B1, Absorbance Plate Reader B3). A trash bin is removed and
+    replaced with a deck expansion slot, then every other empty expansion column
+    (A4, B4, C4, D4) gets a staging area, the same fixture the ODD deck setup adds
+    on A4.
     """
     if not device_details_tabs:
         pytest.skip("Deck Configuration tab requires the Device Details tabs layout.")
@@ -110,10 +114,10 @@ def test_deck_configuration_before_modules(
 
 
 @pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
+    group="calibration",
+    section="Modules",
     label="Calibrate Heater-Shaker",
-    order=100,
+    order=50,
     requires=DECK_CONFIG_FOR_MODULES,
     cases=(("C44408", "HS Calibration"),),
 )
@@ -145,10 +149,10 @@ def test_heater_shaker_calibration(run_local_app: Page, robot_name: str) -> None
 
 
 @pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
+    group="calibration",
+    section="Modules",
     label="Calibrate Temperature Module",
-    order=110,
+    order=60,
     requires=DECK_CONFIG_FOR_MODULES,
     cases=(("C44407", "TD Calibration"),),
 )
@@ -180,10 +184,10 @@ def test_temperature_module_calibration(run_local_app: Page, robot_name: str) ->
 
 
 @pytest.mark.workflow(
-    group="run_setup",
-    section="Calibration",
+    group="calibration",
+    section="Modules",
     label="Calibrate Thermocycler",
-    order=120,
+    order=70,
     requires=DECK_CONFIG_FOR_MODULES,
     cases=(("C44406", "TC Calibration"),),
 )

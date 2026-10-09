@@ -27,10 +27,12 @@ from playwright.sync_api import Page
 # Stashed on the Playwright Browser by ``open_app.connect_playwright``.
 CDP_HTTP_ATTR = "_e2e_cdp_http"
 
-# Two frames a second is enough to follow a UI workflow without flooding CDP.
-_CAPTURE_INTERVAL_S = 0.5
+# Four frames a second keeps short assertion tests from collapsing to a single flash.
+_CAPTURE_INTERVAL_S = 0.25
 _JPEG_QUALITY = 55
 _MAX_CDP_MESSAGE_BYTES = 32 * 1024 * 1024
+# Sub-second tests still produce a playable clip that holds the final screen.
+_MIN_VIDEO_DURATION_S = 2.0
 
 
 class ScreencastRecorder:
@@ -90,11 +92,13 @@ class ScreencastRecorder:
                 self.output_path,
                 start=self._started,
                 end=ended,
+                min_duration_s=_MIN_VIDEO_DURATION_S,
             )
             if saved is None:
                 return None
             elapsed = max(0.0, ended - self._started)
-            print(f"\n📹 {saved.name} — {elapsed:.1f}s, {len(frames)} frames")
+            playback = probe_duration_seconds(saved) or elapsed
+            print(f"\n📹 {saved.name} — {playback:.1f}s playback ({elapsed:.1f}s captured, {len(frames)} frames)")
             return saved
         finally:
             if frames_dir is not None:
@@ -119,7 +123,7 @@ class ScreencastRecorder:
                 open_timeout=10,
                 close_timeout=2,
             ) as websocket:
-                while not self._stop.is_set():
+                while True:
                     began = time.monotonic()
                     params: dict[str, object] = {
                         "format": "jpeg",
@@ -132,7 +136,7 @@ class ScreencastRecorder:
                     try:
                         result = _cdp_call(websocket, "Page.captureScreenshot", params)
                     except (RuntimeError, TimeoutError) as error:
-                        if speed_opt:
+                        if speed_opt and not self._stop.is_set():
                             speed_opt = False
                             continue
                         self._thread_error = str(error)
@@ -144,9 +148,13 @@ class ScreencastRecorder:
                         with self._lock:
                             self._frames.append((time.monotonic(), frame_path))
                         index += 1
+                    if self._stop.is_set():
+                        # Frame above is the end-state snapshot for sub-interval tests.
+                        return
                     remaining = self._interval_s - (time.monotonic() - began)
                     if remaining > 0 and self._stop.wait(remaining):
-                        return
+                        # Wake for a final capture after stop() is called mid-interval.
+                        continue
         except Exception as error:
             self._thread_error = str(error)
 
@@ -167,6 +175,7 @@ def encode_timestamped_jpegs(
     *,
     start: float,
     end: float,
+    min_duration_s: float = 0.0,
 ) -> Path | None:
     """Encode JPEG frames so each one stays on screen for the time it was visible."""
     if not frames:
@@ -174,6 +183,8 @@ def encode_timestamped_jpegs(
     video_path.parent.mkdir(parents=True, exist_ok=True)
     origin = min(start, frames[0][0])
     finish = max(end, frames[-1][0] + 0.05)
+    if min_duration_s > 0:
+        finish = max(finish, origin + min_duration_s)
     concat_path = video_path.with_suffix(".ffconcat.txt")
     lines = ["ffconcat version 1.0"]
     for index, (timestamp, frame_path) in enumerate(frames):
@@ -217,8 +228,13 @@ def encode_timestamped_jpegs(
         concat_path.unlink(missing_ok=True)
 
 
-def concat_mp4s(parts: list[Path], video_path: Path) -> Path | None:
-    """Join mp4 segments into one file, re-encoding if stream copy fails."""
+def concat_mp4s(parts: list[Path], video_path: Path, *, keep_parts: bool = False) -> Path | None:
+    """Join mp4 segments into one file, re-encoding if stream copy fails.
+
+    When ``keep_parts`` is false (default), successful joins delete the input
+    segments — used for per-test workflow pieces. Suite concatenations pass
+    ``keep_parts=True`` so individual test videos remain on disk.
+    """
     existing = [path for path in parts if path.exists()]
     if not existing:
         return None
@@ -232,34 +248,30 @@ def concat_mp4s(parts: list[Path], video_path: Path) -> Path | None:
     concat_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     try:
         saved = _run_ffmpeg(video_path, ["-f", "concat", "-safe", "0", "-i", str(concat_path), "-c", "copy"])
-        if saved is not None:
-            for part in existing:
-                if part != saved:
-                    part.unlink(missing_ok=True)
-            return saved
-        saved = _run_ffmpeg(
-            video_path,
-            [
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(concat_path),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-crf",
-                "28",
-                "-pix_fmt",
-                "yuv420p",
-                "-movflags",
-                "+faststart",
-                "-an",
-            ],
-        )
-        if saved is not None:
+        if saved is None:
+            saved = _run_ffmpeg(
+                video_path,
+                [
+                    "-f",
+                    "concat",
+                    "-safe",
+                    "0",
+                    "-i",
+                    str(concat_path),
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "28",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-movflags",
+                    "+faststart",
+                    "-an",
+                ],
+            )
+        if saved is not None and not keep_parts:
             for part in existing:
                 if part != saved:
                     part.unlink(missing_ok=True)

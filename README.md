@@ -96,10 +96,12 @@ make prep                    # format + typecheck
 
 ## Artifacts
 
-Runs are grouped under ``test-results/YYYY-MM/YYYY-MM-DD/``. ``test-results/latest`` symlinks to today's folder.
+Each pytest session writes under ``test-results/YYYY-MM/YYYY-MM-DD/HH-MM-SS/``.
+Only the two most recent timed runs are kept per day. ``test-results/latest``
+symlinks to the active run folder.
 
 - HTML report: `test-results/latest/report.html`
-- Videos: `test-results/latest/videos/` (headed runs)
+- Videos: `test-results/latest/videos/` (headed runs; per-test clips plus `app_suite.mp4`)
 - Traces: `test-results/latest/traces/`
 
 Do not commit `test-results/` (gitignored).

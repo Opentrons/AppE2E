@@ -16,7 +16,7 @@ PYTEST_HEADED := $(if $(HEADED),HEADED=1,)
 	test-app-device-cards test-app-device-cards-headed \
 	test-app-robot-settings test-app-robot-settings-headed \
 	test-app-calibration test-app-calibration-headed run_abr_2_and_4 \
-	test-ui \
+	ui test-ui catalog \
 	test-odd test-odd-headed \
 	troubleshoot
 
@@ -68,8 +68,14 @@ test-app:
 test-app-headed:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/app/ HEADED_ENV="HEADED=1"
 
-test-ui:
+# Interactive workflow picker — starts the server and opens http://127.0.0.1:8000.
+# Alias: ``make test-ui``.
+ui test-ui:
 	uv run python -m automation.ui_runner.server
+
+# Refresh the static browse page from live tests + testing_workflows.md.
+catalog:
+	uv run python scripts/generate_test_catalog.py
 
 test-app-nav:
 	@$(MAKE) --no-print-directory _pytest-app TEST_PATH=tests/app/nav/ HEADED_ENV="$(PYTEST_HEADED)"
@@ -128,7 +134,7 @@ _app-report-banner:
 	@echo "---------------------------------------------------------"
 	@echo "App tests finished."
 	@echo "Open test-results/latest/report.html for the HTML report."
-	@echo "Videos: test-results/latest/videos/ (headed runs)"
+	@echo "Videos: test-results/latest/videos/ (headed runs; app_suite.mp4 stitches all tests)"
 	@echo "Traces: test-results/latest/traces/"
 	@echo "Dated runs: test-results/YYYY-MM/YYYY-MM-DD/"
 	@echo "---------------------------------------------------------"

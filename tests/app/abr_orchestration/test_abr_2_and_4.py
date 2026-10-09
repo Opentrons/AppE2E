@@ -48,12 +48,24 @@ def _start_run_for_target(page: Page, target: ProtocolRunTarget) -> None:
 
 
 @pytest.mark.timeout(900)
+@pytest.mark.workflow(
+    group="abr",
+    section="Start run",
+    label="ABR2 PCR start run",
+    order=10,
+)
 def test_abr_2_start_run(run_local_app: Page) -> None:
     """Start setup for ABR2 PCR protocol, upload CSV, and click Start run."""
     _start_run_for_target(run_local_app, ABR2)
 
 
 @pytest.mark.timeout(900)
+@pytest.mark.workflow(
+    group="abr",
+    section="Start run",
+    label="ABR4 Illumina DNA Enrichment start run",
+    order=20,
+)
 def test_abr_4_start_run(run_local_app: Page) -> None:
     """Start setup for ABR4 Illumina DNA Enrichment (no CSV) and click Start run."""
     _start_run_for_target(run_local_app, ABR4)

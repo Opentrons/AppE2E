@@ -15,6 +15,12 @@ from automation.app_pages.odd import OddSettingsPage
 
 @pytest.mark.odd
 @pytest.mark.timeout(180)
+@pytest.mark.workflow(
+    group="odd_update",
+    section="System update",
+    label="Switch to Alpha and start robot update",
+    order=10,
+)
 def test_odd_alpha_channel_update(run_odd_app: Page) -> None:
     """Update channel → Alpha → back → Robot system version → Update."""
     settings = OddSettingsPage(run_odd_app)

@@ -1,12 +1,23 @@
+const ROUTES = {
+  setup: "/",
+  run: "/run",
+};
+
 const state = {
   tests: new Map(),
   explicitSelection: new Set(),
   effectiveSelection: new Set(),
   requiredSelection: new Set(),
   rowInputs: new Map(),
+  resultCards: new Map(),
+  activeNodeId: null,
+  runTotal: 0,
+  runCompleted: 0,
+  runCounts: {passed: 0, failed: 0, skipped: 0},
   loading: false,
   runState: "idle",
   cancellationRequested: false,
+  route: "setup",
   socket: null,
   reconnectTimer: null,
   reconnectAttempt: 0,
@@ -16,7 +27,8 @@ const elements = {
   catalog: document.querySelector("#catalog"),
   catalogMessage: document.querySelector("#catalog-message"),
   selectionSummary: document.querySelector("#selection-summary"),
-  selectAll: document.querySelector("#select-all"),
+  selectAllApp: document.querySelector("#select-all-app"),
+  selectAllOdd: document.querySelector("#select-all-odd"),
   runSummary: document.querySelector("#run-summary"),
   run: document.querySelector("#run"),
   cancel: document.querySelector("#cancel"),
@@ -25,19 +37,72 @@ const elements = {
   headed: document.querySelector("#headed"),
   robotName: document.querySelector("#robot-name"),
   protocolName: document.querySelector("#protocol-name"),
+  robotIp: document.querySelector("#robot-ip"),
   connection: document.querySelector("#connection"),
   selectionCovers: document.querySelector("#selection-covers"),
+  runProgress: document.querySelector("#run-progress"),
+  progressFill: document.querySelector("#progress-fill"),
+  progressLabel: document.querySelector("#progress-label"),
   currentTest: document.querySelector("#current-test"),
   emptyProgress: document.querySelector("#empty-progress"),
-  events: document.querySelector("#events"),
-  sourceRegion: document.querySelector("#source-region"),
-  sourcePath: document.querySelector("#source-path"),
-  sourceCode: document.querySelector("#source-code"),
-  sourceOpenEditor: document.querySelector("#source-open-editor"),
-  sourceClose: document.querySelector("#source-close"),
-  artifactRegion: document.querySelector("#artifact-region"),
-  artifacts: document.querySelector("#artifacts"),
+  results: document.querySelector("#results"),
+  runActiveBanner: document.querySelector("#run-active-banner"),
+  runActiveText: document.querySelector("#run-active-text"),
+  navSetup: document.querySelector("#nav-setup"),
+  navRun: document.querySelector("#nav-run"),
 };
+
+function routeFromPath(pathname = location.pathname) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return path === "/run" ? "run" : "setup";
+}
+
+function pathForRoute(route) {
+  return route === "run" ? ROUTES.run : ROUTES.setup;
+}
+
+function applyRoute() {
+  const route = routeFromPath();
+  state.route = route;
+  document.body.dataset.route = route;
+  document.querySelectorAll("[data-view]").forEach((view) => {
+    const active = view.dataset.view === route;
+    view.hidden = !active;
+    view.setAttribute("aria-hidden", active ? "false" : "true");
+  });
+  if (elements.navSetup) {
+    elements.navSetup.setAttribute("aria-current", route === "setup" ? "page" : "false");
+  }
+  if (elements.navRun) {
+    elements.navRun.setAttribute("aria-current", route === "run" ? "page" : "false");
+  }
+  document.title =
+    route === "run" ? "Live run · Opentrons E2E Workflows" : "Select tests · Opentrons E2E Workflows";
+  updateRunBanner();
+}
+
+function navigate(route, {replace = false} = {}) {
+  const next = route === "run" ? "run" : "setup";
+  const path = pathForRoute(next);
+  if (routeFromPath() === next) {
+    applyRoute();
+    return;
+  }
+  history[replace ? "replaceState" : "pushState"]({route: next}, "", path);
+  applyRoute();
+}
+
+function updateRunBanner() {
+  const banner = elements.runActiveBanner;
+  if (!banner) return;
+  const busy = state.runState === "running" || state.runState === "starting" || state.runState === "cancelling";
+  const show = busy && state.route === "setup";
+  banner.classList.toggle("hidden", !show);
+  if (elements.runActiveText) {
+    elements.runActiveText.textContent =
+      state.runState === "cancelling" ? "Cancelling run…" : "A run is in progress.";
+  }
+}
 
 function plural(count, singular, pluralForm = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
@@ -102,6 +167,11 @@ function renderSelectionCovers() {
 function isCalibration(test) {
   // Mirrors the current server-side readiness rule.
   return test.node_id.includes("/calibration/");
+}
+
+function nodeIdsForSuite(suite) {
+  const prefix = suite === "odd" ? "tests/odd/" : "tests/app/";
+  return [...state.tests.keys()].filter((nodeId) => nodeId.startsWith(prefix));
 }
 
 function prerequisiteChainIsAvailable(nodeId, visiting = new Set()) {
@@ -171,7 +241,11 @@ function setToggleState(toggle, nodeIds) {
 }
 
 function targetsFilled() {
-  return Boolean(elements.robotName.value.trim() && elements.protocolName.value.trim());
+  return Boolean(
+    elements.robotName.value.trim() &&
+      elements.protocolName.value.trim() &&
+      elements.robotIp.value.trim(),
+  );
 }
 
 function updateControls() {
@@ -196,7 +270,8 @@ function updateControls() {
   document.querySelectorAll("[data-section-toggle]").forEach((toggle) => {
     setToggleState(toggle, JSON.parse(toggle.dataset.nodeIds));
   });
-  setToggleState(elements.selectAll, [...state.tests.keys()]);
+  setToggleState(elements.selectAllApp, nodeIdsForSuite("app"));
+  setToggleState(elements.selectAllOdd, nodeIdsForSuite("odd"));
 
   const selectedCount = state.effectiveSelection.size;
   const requiredCount = state.requiredSelection.size;
@@ -212,6 +287,8 @@ function updateControls() {
   elements.headed.disabled = state.runState !== "idle";
   elements.robotName.disabled = state.runState !== "idle";
   elements.protocolName.disabled = state.runState !== "idle";
+  elements.robotIp.disabled = state.runState !== "idle";
+  updateRunBanner();
 }
 
 function applyBulkSelection(nodeIds, checked) {
@@ -271,7 +348,7 @@ function makeTestRow(test) {
     source.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openSource(test.file, test.line);
+      openInEditor(test.file, test.line);
     });
     row.append(source);
   }
@@ -387,6 +464,9 @@ async function loadDefaults() {
     if (!elements.protocolName.value && payload.protocol_name) {
       elements.protocolName.value = payload.protocol_name;
     }
+    if (!elements.robotIp.value && payload.robot_ip) {
+      elements.robotIp.value = payload.robot_ip;
+    }
   } catch {
     // Prefill is best-effort; the form still accepts manual values.
   } finally {
@@ -419,103 +499,103 @@ function setRunState(runState) {
   updateControls();
 }
 
+function updateProgressBar() {
+  const total = state.runTotal;
+  const completed = state.runCompleted;
+  const pct = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  elements.progressFill.style.width = `${pct}%`;
+  elements.progressLabel.textContent = total ? `${completed} / ${total}` : "0 / 0";
+  elements.runProgress.classList.toggle("hidden", total === 0 && state.runState === "idle");
+  elements.runProgress.setAttribute("aria-hidden", total === 0 && state.runState === "idle" ? "true" : "false");
+}
+
 function resetRunOutput() {
-  elements.events.replaceChildren();
-  elements.artifacts.replaceChildren();
-  elements.artifactRegion.classList.add("hidden");
-  closeSource();
+  state.resultCards.clear();
+  state.activeNodeId = null;
+  state.runTotal = 0;
+  state.runCompleted = 0;
+  state.runCounts = {passed: 0, failed: 0, skipped: 0};
+  elements.results.replaceChildren();
   elements.currentTest.classList.add("hidden");
   elements.emptyProgress.classList.add("hidden");
+  updateProgressBar();
 }
 
-function editorUrl(absolutePath, line) {
-  if (!absolutePath) return null;
-  const suffix = line ? `:${line}` : "";
-  return `vscode://file${absolutePath.startsWith("/") ? "" : "/"}${absolutePath}${suffix}`;
+function formatRunCounts() {
+  const {passed, failed, skipped} = state.runCounts;
+  const parts = [
+    `${passed} passed`,
+    `${failed} failed`,
+    ...(skipped ? [`${skipped} skipped`] : []),
+  ];
+  return parts.join(", ");
 }
 
-function closeSource() {
-  elements.sourceRegion.classList.add("hidden");
-  elements.sourcePath.textContent = "";
-  elements.sourceCode.replaceChildren();
-  elements.sourceOpenEditor.hidden = true;
-  elements.sourceOpenEditor.removeAttribute("href");
+function shortNodeId(nodeId = "") {
+  return String(nodeId).split("::").slice(-1)[0] || nodeId;
 }
 
-async function openSource(file, line) {
+async function openInEditor(file, line) {
   if (!file) return;
-  elements.sourceRegion.classList.remove("hidden");
-  elements.sourcePath.textContent = "Loading…";
-  elements.sourceCode.replaceChildren();
-  elements.sourceOpenEditor.hidden = true;
   try {
     const params = new URLSearchParams({path: file});
     if (line) params.set("line", String(line));
     const response = await fetch(`/api/source?${params}`);
     if (!response.ok) throw new Error(await responseError(response));
     const payload = await response.json();
-    renderSource(payload);
+    const absolute = payload.absolute_path;
+    if (!absolute) return;
+    const suffix = line || payload.line ? `:${line || payload.line}` : "";
+    window.location.href = `vscode://file${absolute.startsWith("/") ? "" : "/"}${absolute}${suffix}`;
   } catch (error) {
-    elements.sourcePath.textContent = `Could not open ${file}`;
-    elements.sourceCode.textContent = error.message;
+    console.warn("Could not open source in editor", error);
   }
 }
 
-function renderSource(payload) {
-  const highlight = Number(payload.line) || null;
-  elements.sourcePath.textContent = highlight ? `${payload.path}:${highlight}` : payload.path;
-  const openHref = editorUrl(payload.absolute_path, highlight);
-  if (openHref) {
-    elements.sourceOpenEditor.href = openHref;
-    elements.sourceOpenEditor.hidden = false;
-  } else {
-    elements.sourceOpenEditor.hidden = true;
+function ensureResultCard(nodeId, label = "") {
+  if (!nodeId) return null;
+  let card = state.resultCards.get(nodeId);
+  if (card) {
+    if (label) card.querySelector(".result-title").textContent = label;
+    return card;
   }
-
-  const lines = payload.content.split("\n");
-  if (lines.length && lines[lines.length - 1] === "") lines.pop();
-  const fragment = document.createDocumentFragment();
-  let highlighted = null;
-  lines.forEach((text, index) => {
-    const lineNumber = index + 1;
-    const row = document.createElement("div");
-    row.className = "source-line";
-    row.dataset.line = String(lineNumber);
-    if (highlight === lineNumber) {
-      row.classList.add("highlight");
-      highlighted = row;
-    }
-    const lineno = document.createElement("span");
-    lineno.className = "source-lineno";
-    lineno.textContent = String(lineNumber);
-    const code = document.createElement("span");
-    code.className = "source-text";
-    code.textContent = text || " ";
-    row.append(lineno, code);
-    fragment.append(row);
-  });
-  elements.sourceCode.replaceChildren(fragment);
-  if (highlighted) highlighted.scrollIntoView({block: "center"});
+  const fragment = document.querySelector("#result-template").content.cloneNode(true);
+  card = fragment.querySelector(".result-card");
+  card.dataset.nodeId = nodeId;
+  const test = state.tests.get(nodeId);
+  card.querySelector(".result-title").textContent = label || test?.label || shortNodeId(nodeId);
+  elements.results.append(fragment);
+  state.resultCards.set(nodeId, card);
+  card.scrollIntoView({block: "nearest"});
+  return card;
 }
 
-function locationFrom(eventOrTest) {
-  if (!eventOrTest?.file) return null;
-  return {file: eventOrTest.file, line: eventOrTest.line || null};
+function setResultStatus(card, status, detail = "") {
+  if (!card) return;
+  card.dataset.status = status || "running";
+  const statusNode = card.querySelector(".result-status");
+  const label =
+    status === "passed" ? "Passed" : status === "failed" ? "Failed" : status === "skipped" ? "Skipped" : "Running";
+  statusNode.textContent = detail ? `${label} · ${detail}` : label;
 }
 
 async function startRun() {
   if (state.runState !== "idle" || !state.effectiveSelection.size) return;
   const robotName = elements.robotName.value.trim();
   const protocolName = elements.protocolName.value.trim();
-  if (!robotName || !protocolName) {
-    elements.runSummary.textContent = "Enter a robot name and protocol name before running.";
+  const robotIp = elements.robotIp.value.trim();
+  if (!robotName || !protocolName || !robotIp) {
+    elements.runSummary.textContent = "Enter robot name, protocol name, and robot IP before running.";
     updateControls();
     return;
   }
   state.cancellationRequested = false;
   setRunState("starting");
   resetRunOutput();
-  elements.runSummary.textContent = `Starting run for ${robotName} · ${protocolName}…`;
+  state.runTotal = state.effectiveSelection.size;
+  updateProgressBar();
+  navigate("run");
+  elements.runSummary.textContent = `Starting run for ${robotName} · ${protocolName} · ${robotIp}…`;
   try {
     const response = await fetch("/api/run", {
       method: "POST",
@@ -524,19 +604,26 @@ async function startRun() {
         node_ids: [...state.effectiveSelection],
         robot_name: robotName,
         protocol_name: protocolName,
+        robot_ip: robotIp,
         flex_ready: elements.flexReady.checked,
         headed: elements.headed.checked,
       }),
     });
     if (!response.ok) throw new Error(await responseError(response));
     const body = await response.json();
+    state.runTotal = Array.isArray(body.node_ids) ? body.node_ids.length : state.runTotal;
+    updateProgressBar();
     setRunState("running");
     elements.runSummary.textContent =
-      `Running ${plural(body.node_ids.length, "test")} · ${robotName} · ${protocolName}`;
+      `Running ${plural(body.node_ids.length, "test")} · ${robotName} · ${protocolName} · ${robotIp}`;
   } catch (error) {
     setRunState("idle");
+    state.runTotal = 0;
+    updateProgressBar();
     elements.emptyProgress.classList.remove("hidden");
     elements.runSummary.textContent = `Run could not start: ${error.message}`;
+    navigate("setup");
+    showCatalogMessage(`Run could not start: ${error.message}`, "error");
   }
 }
 
@@ -562,85 +649,6 @@ async function cancelRun() {
   }
 }
 
-function appendEvent(label, detail = "", status = "", location = null) {
-  const fragment = document.querySelector("#event-template").content.cloneNode(true);
-  const item = fragment.querySelector("li");
-  if (status) item.classList.add(status);
-  const title = item.querySelector("strong");
-  if (location?.file) {
-    item.classList.add("has-source");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "source-link";
-    button.textContent = label || "Progress update";
-    button.title = location.line ? `${location.file}:${location.line}` : location.file;
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      openSource(location.file, location.line);
-    });
-    item.addEventListener("click", (event) => {
-      if (event.target.closest("button, a")) return;
-      openSource(location.file, location.line);
-    });
-    title.replaceWith(button);
-  } else {
-    title.textContent = label || "Progress update";
-  }
-  const detailNode = item.querySelector("small");
-  if (status === "log" && detail) {
-    const url = artifactUrl(detail);
-    if (url) {
-      detailNode.textContent = "";
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener";
-      link.textContent = detail;
-      detailNode.append(link);
-    } else {
-      detailNode.textContent = detail;
-    }
-  } else {
-    detailNode.textContent = detail;
-  }
-  elements.events.append(fragment);
-  item.scrollIntoView({block: "nearest"});
-}
-
-function appendCoversEvent(testLabel, cases, location = null) {
-  const fragment = document.querySelector("#event-template").content.cloneNode(true);
-  const item = fragment.querySelector("li");
-  item.classList.add("covers");
-  item.querySelector("strong").textContent = testLabel;
-  const detail = item.querySelector("small");
-  if (!cases.length) {
-    detail.textContent = "No TestRail cases mapped";
-  } else {
-    detail.textContent = "";
-    const intro = document.createElement("span");
-    intro.textContent = "Covers:";
-    detail.append(intro);
-    const ul = document.createElement("ul");
-    ul.className = "event-covers";
-    for (const entry of cases) {
-      const li = document.createElement("li");
-      li.textContent = formatCase(entry);
-      ul.append(li);
-    }
-    detail.append(ul);
-  }
-  if (location?.file) {
-    item.classList.add("has-source");
-    item.title = location.line ? `${location.file}:${location.line}` : location.file;
-    item.addEventListener("click", (event) => {
-      if (event.target.closest("button, a")) return;
-      openSource(location.file, location.line);
-    });
-  }
-  elements.events.append(fragment);
-  item.scrollIntoView({block: "nearest"});
-}
-
 function artifactUrl(path) {
   if (typeof path !== "string" || !path) return null;
   const normalized = path.replaceAll("\\", "/");
@@ -659,47 +667,27 @@ function artifactUrl(path) {
   return `/${servedPath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-function renderArtifacts(artifacts = {}, nodeId = "") {
-  for (const [kind, path] of Object.entries(artifacts || {})) {
-    const url = artifactUrl(path);
-    if (!url) {
-      appendEvent("Artifact unavailable", `${kind}: path is outside a served artifact directory`, "warning");
-      continue;
-    }
+function renderResultMedia(nodeId, artifacts = {}, failure = "") {
+  const card = nodeId ? ensureResultCard(nodeId) : null;
+  if (!card) return;
 
-    const card = document.createElement("article");
-    card.className = "artifact-card";
-    const title = document.createElement("strong");
-    title.textContent = kind.replace("_path", "").replaceAll("_", " ");
-    if (kind === "screenshot_path") {
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener";
-      const image = document.createElement("img");
-      image.src = url;
-      image.alt = `Screenshot artifact for ${nodeId || "test"}`;
-      image.loading = "lazy";
-      link.append(image);
-      card.append(link, title);
-    } else if (kind === "video_path") {
-      const video = document.createElement("video");
-      video.src = url;
-      video.controls = true;
-      video.preload = "metadata";
-      card.append(video, title);
-    } else {
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener";
-      link.textContent = kind === "trace_path" ? "Open Playwright trace" : `Open ${title.textContent}`;
-      card.append(title, link);
-    }
-    elements.artifacts.append(card);
-    elements.artifactRegion.classList.remove("hidden");
-    const kindLabel = kind === "video_path" ? "Playwright video" : kind.replace("_path", "").replaceAll("_", " ");
-    appendEvent(kindLabel, path, "log", null);
+  const videoPath = artifacts.video_path;
+  const video = card.querySelector(".result-video");
+  const caption = card.querySelector(".result-caption");
+  const url = videoPath ? artifactUrl(videoPath) : null;
+  if (url) {
+    video.src = url;
+    video.classList.remove("hidden");
+  }
+  if (videoPath && caption) {
+    caption.textContent = videoPath;
+    caption.classList.remove("hidden");
+  }
+
+  const block = card.querySelector(".result-failure");
+  if (failure) {
+    block.textContent = failure;
+    block.classList.remove("hidden");
   }
 }
 
@@ -711,7 +699,9 @@ function numberOrZero(value) {
 function finishRun(summary) {
   setRunState("idle");
   elements.currentTest.classList.add("hidden");
-  elements.runSummary.textContent = summary;
+  const counts = formatRunCounts();
+  elements.runSummary.textContent = counts ? `${summary} · ${counts}` : summary;
+  updateProgressBar();
 }
 
 function handleEvent(event) {
@@ -719,47 +709,39 @@ function handleEvent(event) {
   if (event.type === "session_start") {
     if (state.runState === "idle") setRunState("running");
     elements.emptyProgress.classList.add("hidden");
+    if (!state.runTotal) {
+      state.runTotal = state.effectiveSelection.size;
+      updateProgressBar();
+    }
   } else if (event.type === "test_start") {
     const test = state.tests.get(event.node_id);
     const testLabel = test?.label || event.label || event.node_id;
-    const location = locationFrom(event) || locationFrom(test);
-    const cases = Array.isArray(event.cases) && event.cases.length ? event.cases : casesFor(test);
+    state.activeNodeId = event.node_id || null;
+    const card = ensureResultCard(event.node_id, testLabel);
+    setResultStatus(card, "running");
     elements.currentTest.textContent = testLabel || "Starting test";
     elements.currentTest.classList.remove("hidden");
-    if (location) {
-      elements.currentTest.classList.add("has-source");
-      elements.currentTest.title = location.line ? `${location.file}:${location.line}` : location.file;
-      elements.currentTest.onclick = () => openSource(location.file, location.line);
-    } else {
-      elements.currentTest.classList.remove("has-source");
-      elements.currentTest.removeAttribute("title");
-      elements.currentTest.onclick = null;
-    }
-    appendCoversEvent(testLabel, cases, location);
-  } else if (event.type === "step_start") {
-    appendEvent(event.label, "In progress", "", locationFrom(event));
-  } else if (event.type === "step_done") {
-    const detail = event.seconds == null ? "Done" : `${numberOrZero(event.seconds).toFixed(1)}s`;
-    appendEvent(event.label, detail, "passed", locationFrom(event));
-  } else if (event.type === "log") {
-    const kind = event.kind || "info";
-    const pathMatch = typeof event.label === "string" ? event.label.match(/:\s*(.+)$/) : null;
-    const pathDetail = kind === "video" || kind === "trace" || kind === "path" ? (pathMatch?.[1] || "") : kind;
-    appendEvent(event.label, pathDetail, "log", locationFrom(event));
-  } else if (event.type === "artifact") {
-    const kindLabel =
-      event.kind === "video_path" ? "Playwright video" : (event.kind || "artifact").replace("_path", "").replaceAll("_", " ");
-    appendEvent(kindLabel, event.path || "", "log");
+  } else if (
+    event.type === "step_start" ||
+    event.type === "step_done" ||
+    event.type === "log" ||
+    event.type === "artifact"
+  ) {
+    // Intentionally ignored — keep the progress panel to bar + finished video/stack.
   } else if (event.type === "test_end") {
     const status = event.status || "completed";
     const test = state.tests.get(event.node_id);
-    const testLabel = test?.label || event.node_id;
-    const detail =
-      status === "failed"
-        ? `failed · ${numberOrZero(event.duration).toFixed(1)}s · continuing to next test`
-        : `${status} · ${numberOrZero(event.duration).toFixed(1)}s`;
-    appendEvent(testLabel, detail, status, locationFrom(test));
-    renderArtifacts(event.artifacts, event.node_id);
+    const testLabel = test?.label || shortNodeId(event.node_id);
+    const card = ensureResultCard(event.node_id, testLabel);
+    const duration = `${numberOrZero(event.duration).toFixed(1)}s`;
+    setResultStatus(card, status, duration);
+    renderResultMedia(event.node_id, event.artifacts || {}, event.failure || "");
+    if (status === "passed" || status === "failed" || status === "skipped") {
+      state.runCounts[status] += 1;
+    }
+    state.runCompleted += 1;
+    updateProgressBar();
+    state.activeNodeId = null;
   } else if (event.type === "run_cancelled") {
     finishRun("Run cancelled");
   } else if (event.type === "runner_end") {
@@ -807,7 +789,7 @@ function connectEvents() {
     try {
       handleEvent(JSON.parse(data));
     } catch (error) {
-      appendEvent("Progress message ignored", error.message, "warning");
+      console.warn("Progress message ignored", error);
     }
   });
   socket.addEventListener("error", () => socket.close());
@@ -821,13 +803,23 @@ function connectEvents() {
 elements.run.addEventListener("click", startRun);
 elements.cancel.addEventListener("click", cancelRun);
 elements.refresh.addEventListener("click", () => loadCatalog(true));
-elements.sourceClose.addEventListener("click", closeSource);
-elements.selectAll.addEventListener("change", () => {
-  applyBulkSelection([...state.tests.keys()], elements.selectAll.checked);
+elements.selectAllApp.addEventListener("change", () => {
+  applyBulkSelection(nodeIdsForSuite("app"), elements.selectAllApp.checked);
+});
+elements.selectAllOdd.addEventListener("change", () => {
+  applyBulkSelection(nodeIdsForSuite("odd"), elements.selectAllOdd.checked);
 });
 elements.flexReady.addEventListener("change", reconcileSelection);
 elements.robotName.addEventListener("input", updateControls);
 elements.protocolName.addEventListener("input", updateControls);
+elements.robotIp.addEventListener("input", updateControls);
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-nav]");
+  if (!link) return;
+  event.preventDefault();
+  navigate(link.dataset.nav);
+});
+window.addEventListener("popstate", applyRoute);
 window.addEventListener("online", () => {
   state.reconnectAttempt = 0;
   if (state.reconnectTimer) {
@@ -840,6 +832,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") connectEvents();
 });
 
+applyRoute();
 loadDefaults();
 loadCatalog();
 connectEvents();

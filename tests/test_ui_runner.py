@@ -151,15 +151,23 @@ def test_source_api_rejects_missing_and_unsafe_paths() -> None:
 
 def test_defaults_api_returns_robot_and_protocol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env_path = tmp_path / ".env"
-    env_path.write_text("ROBOT_NAME=UIRobot\nPROTOCOL_NAME=UI Protocol\n", encoding="utf-8")
+    env_path.write_text(
+        "ROBOT_NAME=UIRobot\nPROTOCOL_NAME=UI Protocol\nROBOT_IP=10.14.19.200\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr("automation.ui_runner.server.ENV_PATH", env_path)
     monkeypatch.delenv("ROBOT_NAME", raising=False)
     monkeypatch.delenv("PROTOCOL_NAME", raising=False)
+    monkeypatch.delenv("ROBOT_IP", raising=False)
 
     client = TestClient(app)
     response = client.get("/api/defaults")
     assert response.status_code == 200
-    assert response.json() == {"robot_name": "UIRobot", "protocol_name": "UI Protocol"}
+    assert response.json() == {
+        "robot_name": "UIRobot",
+        "protocol_name": "UI Protocol",
+        "robot_ip": "10.14.19.200",
+    }
 
 
 def test_upsert_env_keys_preserves_unrelated_entries(tmp_path: Path) -> None:
@@ -184,3 +192,14 @@ def test_run_api_requires_robot_and_protocol_names() -> None:
         json={"node_ids": ["tests/test_example.py::test_setup"], "flex_ready": False, "headed": True},
     )
     assert response.status_code == 422
+
+
+def test_spa_routes_serve_index() -> None:
+    client = TestClient(app)
+    for path in ("/", "/run"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "Workflow test runner" in response.text
+        assert 'data-nav="setup"' in response.text
+        assert 'data-nav="run"' in response.text

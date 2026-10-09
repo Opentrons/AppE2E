@@ -10,9 +10,32 @@ import pytest
 from automation.app_helpers.screencast_recorder import (
     CDP_HTTP_ATTR,
     ScreencastRecorder,
+    concat_mp4s,
     encode_timestamped_jpegs,
     probe_duration_seconds,
 )
+
+
+def _short_mp4(path: Path, color: str) -> Path:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c={color}:s=320x240:d=0.5",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return path
 
 
 def _jpeg(path: Path, color: str) -> None:
@@ -33,6 +56,20 @@ def _jpeg(path: Path, color: str) -> None:
     )
 
 
+def test_concat_mp4s_keeps_parts_when_requested(tmp_path: Path) -> None:
+    """Suite stitching must leave the individual test clips on disk."""
+    a = _short_mp4(tmp_path / "a.mp4", "red")
+    b = _short_mp4(tmp_path / "b.mp4", "blue")
+    joined = concat_mp4s([a, b], tmp_path / "suite.mp4", keep_parts=True)
+    assert joined is not None
+    assert joined.exists()
+    assert a.exists()
+    assert b.exists()
+    duration = probe_duration_seconds(joined)
+    assert duration is not None
+    assert duration == pytest.approx(1.0, abs=0.4)
+
+
 def test_sparse_frames_hold_for_the_whole_workflow(tmp_path: Path) -> None:
     """A handful of paints must still produce a video as long as the test."""
     frames_dir = tmp_path / "frames"
@@ -49,6 +86,28 @@ def test_sparse_frames_hold_for_the_whole_workflow(tmp_path: Path) -> None:
     duration = probe_duration_seconds(saved)
     assert duration is not None
     assert duration == pytest.approx(3.0, abs=0.35)
+
+
+def test_short_capture_pads_to_minimum_playback(tmp_path: Path) -> None:
+    """A sub-second test still yields a watchable clip of the final screen."""
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    start = 500.0
+    path = frames_dir / "frame_000000.jpg"
+    _jpeg(path, "teal")
+    frames = [(start + 0.05, path)]
+
+    saved = encode_timestamped_jpegs(
+        frames,
+        tmp_path / "short.mp4",
+        start=start,
+        end=start + 0.2,
+        min_duration_s=2.0,
+    )
+    assert saved is not None
+    duration = probe_duration_seconds(saved)
+    assert duration is not None
+    assert duration == pytest.approx(2.0, abs=0.35)
 
     codec = subprocess.run(
         [

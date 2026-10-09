@@ -18,6 +18,12 @@ _PROTOCOL_2 = "Protocol 2: Hardware API pick up and drop labware"
 
 
 @pytest.mark.odd
+@pytest.mark.workflow(
+    group="odd_protocols",
+    section="Protocol section",
+    label="Pin, unpin, cancel, and delete Protocol 1",
+    order=30,
+)
 def test_odd_protocol_section(run_odd_app: Page) -> None:
     """Walk protocol tabs, pin, unpin, and cancel, then delete Protocol 1.
 

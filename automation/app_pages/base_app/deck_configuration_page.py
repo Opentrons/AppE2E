@@ -31,6 +31,8 @@ ABSORBANCE_OPTION = re.compile(r"^Absorbance Plate Reader Module GEN1")
 STACKER_OPTION = re.compile(r"^Flex Stacker Module GEN1")
 STAGING_AREA_OPTION = "Staging Area Slot"
 WASTE_CHUTE_OPTION = "Waste chute"
+# Empty column-4 controls. Adding a staging area here replaces the cutout with an extra deck slot.
+EXPANSION_SLOT_IDS = ("fakeA4", "fakeB4", "fakeC4", "fakeD4")
 
 # Slot, add-modal option, and the label on the configured deck button.
 _STANDARD_MODULES: tuple[tuple[str, str | re.Pattern[str], str], ...] = (
@@ -51,11 +53,22 @@ _STANDARD_LABELS = (
     "Waste",
 )
 
+# HS / Temp / TC — the modules Module Wizard calibration exercises.
+_CALIBRATION_MODULES = tuple(
+    entry for entry in _STANDARD_MODULES if entry[2] in ("Temperature", "Heater-Shaker", "Thermocycler")
+)
+# Same slots, plus the absorbance reader on B3. Added before column-4 expansion slots
+# so B3 is still an empty slot when the Add modal opens.
+_CALIBRATION_DECK_MODULES = (
+    *_CALIBRATION_MODULES,
+    ("B3", ABSORBANCE_OPTION, "Absorbance"),
+)
+
 
 class DeckConfigurationPage(AppBasePage):
     """Inspect and configure modules and fixtures on the Flex deck."""
 
-    SLOT_IDS = ("A3", "B1", "B3", "C1", "D1", "D3", "fakeA4", "fakeC4", "fakeD4")
+    SLOT_IDS = ("A3", "B1", "B3", "C1", "D1", "D3", "fakeA4", "fakeB4", "fakeC4", "fakeD4")
 
     def __init__(self, page: Page, *, robot_name: str) -> None:
         super().__init__(page)
@@ -90,38 +103,78 @@ class DeckConfigurationPage(AppBasePage):
     CALIBRATION_MODULE_LABELS = ("Temperature", "Heater-Shaker", "Thermocycler")
 
     def ensure_calibration_modules_configured(self) -> list[str]:
-        """Open Deck Configuration and ensure HS / Temp / TC slots are set.
+        """Open Deck Configuration and prepare it for module calibration.
 
-        Factory-default trash on A3 (or a fully empty deck) is filled with the
-        standard QA lab layout. A deck that already has other fixtures/modules but
-        is still missing a calibration module raises with the current labels.
+        Places any missing Heater-Shaker (C1), Temperature (D1), Thermocycler (B1),
+        and Absorbance Plate Reader (B3). Removes a trash bin and adds a deck
+        expansion slot on that cutout, then adds a staging area on every other empty
+        expansion column (A4, B4, C4, D4), the same fixture the ODD deck setup adds
+        on A4.
         Returns the configured labels after the check.
         """
         self.open()
-        labels = self.configured_module_labels()
-        present = set(labels)
-        missing = [name for name in self.CALIBRATION_MODULE_LABELS if name not in present]
+        self._add_missing_calibration_modules()
+        self.ensure_deck_expansion_slots()
 
-        if not missing:
-            return labels
-
-        # Trash bin alone is the Flex factory default — treat it like an empty deck.
-        meaningful = [label for label in labels if label != "Trash bin"]
-        if meaningful:
-            raise AssertionError(
-                "Deck is configured but missing modules required for calibration: "
-                f"{missing}. Current labels: {labels}"
-            )
-
-        self.configure_standard_deck()
         after = self.configured_module_labels()
-        still_missing = [name for name in self.CALIBRATION_MODULE_LABELS if name not in set(after)]
+        required = (*self.CALIBRATION_MODULE_LABELS, "Absorbance")
+        still_missing = [name for name in required if name not in set(after)]
         if still_missing:
             raise AssertionError(
-                "Standard deck setup did not place calibration modules: "
-                f"{still_missing}. Labels after setup: {after}"
+                f"Deck setup did not place calibration modules: {still_missing}. Labels after setup: {after}"
             )
+        if "Trash bin" in after:
+            raise AssertionError(f"Trash bin is still configured. Labels after setup: {after}")
         return after
+
+    def _add_missing_calibration_modules(self) -> None:
+        """Place missing HS / Temp / TC and the absorbance reader on their standard slots.
+
+        Leaves every other configured fixture in place. The module must already
+        be attached and unconfigured so it appears in the slot's Add list.
+        """
+        self.dismiss_open_add_modal()
+        required = tuple(label for _, _, label in _CALIBRATION_DECK_MODULES)
+        missing = [name for name in required if not self._label_visible(name)]
+        for slot_id, option, label in _CALIBRATION_DECK_MODULES:
+            if label not in missing:
+                continue
+            if not self._slot_is_empty(slot_id):
+                raise AssertionError(
+                    f"Cannot add {label} for calibration: slot {slot_id} is not empty. "
+                    f"Current labels: {self.configured_module_labels()}"
+                )
+            self.add_module_to_slot(slot_id, option)
+            expect(self.module_button(label).first).to_be_visible(timeout=15_000)
+
+    def ensure_deck_expansion_slots(self) -> list[str]:
+        """Replace a trash bin with a deck slot, then fill the other expansion columns.
+
+        A trash bin on column 3 hides that column's expansion control. Removing it
+        reveals the empty ``fake*4`` slot. Each empty expansion column then gets a
+        Staging Area Slot, matching the ODD add on A4. Columns that already have a
+        Stage or a stacker are left alone. Returns the expansion slot ids that were added.
+        """
+        self.dismiss_open_add_modal()
+        removed_trash = self._label_visible("Trash bin")
+        if removed_trash:
+            self.remove_module_by_label("Trash bin")
+            expect(self.module_button("Trash bin")).to_have_count(0, timeout=15_000)
+            if not self._visible_expansion_slots():
+                expect(self.page.get_by_test_id(re.compile(r"^fake[ABCD]4$")).first).to_be_visible(timeout=15_000)
+
+        added: list[str] = []
+        for slot_id in EXPANSION_SLOT_IDS:
+            if not self._slot_is_empty(slot_id):
+                continue
+            before = self.module_button("Stage").count()
+            self.add_fixture_to_slot(slot_id, STAGING_AREA_OPTION)
+            expect(self.module_button("Stage")).to_have_count(before + 1, timeout=15_000)
+            added.append(slot_id)
+        return added
+
+    def _visible_expansion_slots(self) -> list[str]:
+        return [slot_id for slot_id in EXPANSION_SLOT_IDS if self._slot_is_empty(slot_id)]
 
     def dismiss_open_add_modal(self) -> None:
         """Close a leftover Add-to-slot modal if one is open."""
@@ -181,11 +234,18 @@ class DeckConfigurationPage(AppBasePage):
         control.first.click()
 
     def add_module_to_slot(self, slot_id: str, display_name: str | re.Pattern[str]) -> None:
-        """Add a module: empty slot → Modules → Add (USB port may vary)."""
+        """Add a module on an empty slot.
+
+        Column slots such as B3 open straight to the module list, where the Add
+        button's ``data-testid`` includes the USB port (``Absorbance Plate Reader
+        Module GEN1 in USB-5``). Other slots open a Fixtures / Modules chooser first.
+        """
         if not self._slot_is_empty(slot_id):
             raise AssertionError(f"Slot {slot_id} is not empty, so a module cannot be added")
         self._open_add_menu(slot_id)
-        self._select_add_category("Modules")
+        add = self._option_add_button(display_name)
+        if add.count() == 0 or not add.first.is_visible():
+            self._select_add_category("Modules")
         self._click_option_add(display_name)
 
     def add_fixture_to_slot(self, slot_id: str, fixture: str | re.Pattern[str]) -> None:
@@ -261,14 +321,14 @@ class DeckConfigurationPage(AppBasePage):
     def ensure_staging_area_a4(self) -> str:
         """Add the deck expansion slot (staging area) on A4.
 
-        Returns ``added`` or ``already present``.
+        Returns ``added`` or ``already present``. A Stage on another column does not
+        count as A4; only an empty ``fakeA4`` control is filled.
         """
-        if self._label_visible("Stage"):
-            return "already present"
         if not self._slot_is_empty("fakeA4"):
-            raise AssertionError("A4 is not empty, so a deck expansion slot cannot be added")
+            return "already present"
+        before = self.module_button("Stage").count()
         self.add_fixture_to_slot("fakeA4", STAGING_AREA_OPTION)
-        expect(self.module_button("Stage").first).to_be_visible(timeout=15_000)
+        expect(self.module_button("Stage")).to_have_count(before + 1, timeout=15_000)
         return "added"
 
     def configure_standard_empty_deck(self) -> list[str]:

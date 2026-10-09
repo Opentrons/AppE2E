@@ -47,6 +47,12 @@ def _send_protocols(page: Page, robot_ip: str, protocol_names: tuple[str, ...]) 
 
 
 @pytest.mark.odd
+@pytest.mark.workflow(
+    group="odd_protocols",
+    section="Protocol prep",
+    label="Send three protocols, then walk dashboard flows",
+    order=20,
+)
 def test_odd_protocols(request: pytest.FixtureRequest, run_odd_app: Page, robot_ip: str) -> None:
     """Prep the three protocols, then walk dashboard, list, smoke details, pin, and delete.
 

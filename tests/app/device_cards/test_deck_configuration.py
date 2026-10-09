@@ -28,6 +28,7 @@ EXPECTED_STANDARD_DECK_LABELS = {
     label="Review deck configuration",
     order=30,
     requires=ROBOT_DETAIL_REQUIRED,
+    cases=(("C607", "Module & Fixture Labels"),),
 )
 def test_deck_configuration(
     run_local_app: Page,

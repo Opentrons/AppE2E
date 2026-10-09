@@ -149,6 +149,11 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
         status = "skipped"
     else:
         status = "passed"
+    failure = ""
+    for phase in phases:
+        if phase.failed and phase.longrepr is not None:
+            failure = str(phase.longrepr).strip()
+            break
     artifacts: dict[str, str] = {}
     root = Path.cwd().resolve()
     screenshot_keys = {
@@ -165,15 +170,16 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
             artifacts[name] = artifact_path.relative_to(root).as_posix()
         except ValueError:
             continue
-    writer.emit(
-        {
-            "type": "test_end",
-            "node_id": item.nodeid,
-            "status": status,
-            "duration": sum(float(phase.duration) for phase in phases),
-            "artifacts": artifacts,
-        }
-    )
+    payload: dict[str, object] = {
+        "type": "test_end",
+        "node_id": item.nodeid,
+        "status": status,
+        "duration": sum(float(phase.duration) for phase in phases),
+        "artifacts": artifacts,
+    }
+    if failure:
+        payload["failure"] = failure
+    writer.emit(payload)
     for kind, path in artifacts.items():
         writer.emit({"type": "artifact", "node_id": item.nodeid, "kind": kind, "path": path})
     writer.set_current_test(None)

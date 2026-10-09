@@ -14,6 +14,16 @@ _PASSWORD = "testadminpassword"
 
 
 @pytest.mark.odd
+@pytest.mark.workflow(
+    group="odd_deck",
+    section="Deck configuration",
+    label="Configure standard QA deck with waste chute",
+    order=10,
+    cases=(
+        ("C44952", "Deck Configuration"),
+        ("C44951", "Deck Configuration"),
+    ),
+)
 def test_odd_deck_configuration(run_odd_app: Page) -> None:
     """Open Deck configuration and load the standard QA lab layout, including a waste chute.
 

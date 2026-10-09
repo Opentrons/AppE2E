@@ -18,6 +18,12 @@ _PASSWORD = "r0B@t$2@"
 
 @pytest.mark.odd
 @pytest.mark.timeout(900)
+@pytest.mark.workflow(
+    group="odd_device_reset",
+    section="Device reset",
+    label="Welcome, language, and Wi-Fi after reset",
+    order=20,
+)
 def test_odd_initial_post_device_reset(run_odd_app: Page, robot_ip: str) -> None:
     """Welcome, English (US), and Wi-Fi after a device reset.
 

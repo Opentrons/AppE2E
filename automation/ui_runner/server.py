@@ -20,6 +20,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from automation.app_helpers.reporting import results_day_dir
+from automation.app_helpers.robot_connection import DEFAULT_ROBOT_IP
+from automation.ui_runner.workflows import CATALOG_PATHS
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
@@ -82,7 +84,12 @@ def resolve_run_defaults() -> dict[str, str]:
         or file_values.get("PROTOCOL_NAME", "").strip()
         or DEFAULT_PROTOCOL_NAME
     )
-    return {"robot_name": robot_name, "protocol_name": protocol_name}
+    robot_ip = (
+        os.environ.get("ROBOT_IP", "").strip()
+        or file_values.get("ROBOT_IP", "").strip()
+        or DEFAULT_ROBOT_IP
+    )
+    return {"robot_name": robot_name, "protocol_name": protocol_name, "robot_ip": robot_ip}
 
 
 def resolve_repo_path(relative_path: str) -> Path:
@@ -104,6 +111,7 @@ class RunRequest(BaseModel):
     node_ids: list[str] = Field(min_length=1)
     robot_name: str = Field(min_length=1)
     protocol_name: str = Field(min_length=1)
+    robot_ip: str = Field(min_length=1)
     flex_ready: bool = False
     headed: bool = True
 
@@ -126,7 +134,7 @@ class WorkflowCatalog:
                 sys.executable,
                 "-m",
                 "pytest",
-                "tests/app",
+                *CATALOG_PATHS,
                 "--collect-only",
                 "-q",
                 "-p",
@@ -250,8 +258,11 @@ class PytestRunner:
             self._cancelled = False
             robot_name = request.robot_name.strip()
             protocol_name = request.protocol_name.strip()
+            robot_ip = request.robot_ip.strip()
             if not robot_name or not protocol_name:
                 raise ValueError("Robot name and protocol name are required.")
+            if not robot_ip:
+                raise ValueError("Robot IP is required.")
 
             environment = os.environ.copy()
             environment["SKIP_FLEX_SETUP_PROMPT"] = "1"
@@ -259,11 +270,18 @@ class PytestRunner:
             environment["E2E_NO_PAUSE"] = "1"
             environment["ROBOT_NAME"] = robot_name
             environment["PROTOCOL_NAME"] = protocol_name
+            environment["ROBOT_IP"] = robot_ip
             if request.headed:
                 environment["HEADED"] = "1"
             else:
                 environment.pop("HEADED", None)
-            _upsert_env_keys({"ROBOT_NAME": robot_name, "PROTOCOL_NAME": protocol_name})
+            _upsert_env_keys(
+                {
+                    "ROBOT_NAME": robot_name,
+                    "PROTOCOL_NAME": protocol_name,
+                    "ROBOT_IP": robot_ip,
+                }
+            )
             command = [
                 sys.executable,
                 "-m",
@@ -271,6 +289,8 @@ class PytestRunner:
                 *node_ids,
                 "--robot-name",
                 robot_name,
+                "--robot-ip",
+                robot_ip,
                 "-p",
                 "automation.ui_runner.event_plugin",
                 f"--e2e-events={event_path}",
@@ -289,6 +309,7 @@ class PytestRunner:
                     "node_ids": node_ids,
                     "robot_name": robot_name,
                     "protocol_name": protocol_name,
+                    "robot_ip": robot_ip,
                 }
             )
             self._completion_task = asyncio.create_task(self._wait_for_completion())
@@ -357,6 +378,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Opentrons E2E Workflow Runner", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def disable_ui_cache(request, call_next):
+    """Local runner UI changes often; avoid stale HTML/JS mismatches in the browser."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.get("/api/defaults")
 async def get_defaults() -> dict[str, str]:
     """Robot and protocol names for the run form (env / .env / built-in)."""
@@ -418,9 +449,21 @@ async def websocket_events(websocket: WebSocket) -> None:
         return
 
 
+def _index_response() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/")
 async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return _index_response()
+
+
+@app.get("/run")
+async def live_run() -> FileResponse:
+    return _index_response()
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -429,9 +472,33 @@ app.mount("/test-results", StaticFiles(directory=RESULTS_DIR, check_dir=False), 
 
 
 def main() -> None:
+    import threading
+    import time
+    import webbrowser
+
     import uvicorn
 
-    uvicorn.run("automation.ui_runner.server:app", host="127.0.0.1", port=8000, reload=False)
+    host = "127.0.0.1"
+    port = 8000
+    url = f"http://{host}:{port}/"
+
+    def _open_browser() -> None:
+        # Wait until uvicorn is listening so the first load does not fail.
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            try:
+                import urllib.request
+
+                with urllib.request.urlopen(url, timeout=0.5) as response:
+                    if response.status < 500:
+                        break
+            except Exception:
+                time.sleep(0.2)
+        webbrowser.open(url)
+
+    threading.Thread(target=_open_browser, daemon=True).start()
+    print(f"Opentrons E2E workflow runner: {url}", flush=True)
+    uvicorn.run("automation.ui_runner.server:app", host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":

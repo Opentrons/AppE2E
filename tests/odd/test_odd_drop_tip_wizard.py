@@ -27,6 +27,12 @@ def _drop_tip_wizard_is_open(page: Page) -> bool:
 
 @pytest.mark.odd
 @pytest.mark.timeout(540)
+@pytest.mark.workflow(
+    group="odd_instruments",
+    section="Drop tips",
+    label="Blow out and drop tip in waste chute",
+    order=10,
+)
 def test_odd_blowout_and_drop_tip_in_waste_chute(run_odd_app: Page) -> None:
     """Open the left pipette and run blowout → waste-chute drop → Exit.
 
@@ -58,6 +64,12 @@ def test_odd_blowout_and_drop_tip_in_waste_chute(run_odd_app: Page) -> None:
 
 @pytest.mark.odd
 @pytest.mark.timeout(540)
+@pytest.mark.workflow(
+    group="odd_instruments",
+    section="Drop tips",
+    label="Drop tip in waste chute without blowout",
+    order=20,
+)
 def test_odd_drop_tip_in_waste_chute_without_blowout(run_odd_app: Page) -> None:
     """Skip blowout with "No, proceed to tip removal", then drop in the waste chute."""
     page = run_odd_app

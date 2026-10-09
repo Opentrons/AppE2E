@@ -54,6 +54,7 @@ def _open_run_setup(page: Page, protocol_name: str, robot_name: str) -> RunSetup
                 label="Deck Hardware",
                 order=20,
                 requires=PROTOCOL_RUN_TABS_REQUIRED,
+                cases=(("C607", "Module & Fixture Labels"),),
             ),
         ),
         pytest.param(

@@ -14,6 +14,12 @@ _PASSWORD = "testadminpassword"
 
 
 @pytest.mark.odd
+@pytest.mark.workflow(
+    group="odd_device_reset",
+    section="Device reset",
+    label="Clear all stored data and restart",
+    order=10,
+)
 def test_odd_clear_all_stored_data(run_odd_app: Page) -> None:
     """Settings → Device reset → Clear all stored data → Clear data and restart robot.
 

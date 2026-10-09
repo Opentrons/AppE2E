@@ -47,6 +47,9 @@ This repo automates **Opentrons desktop app (Electron) E2E** against a real Flex
 **Path:** Robot Settings → Advanced → Device Reset
 
 Select all reset options except **Clear SSH public keys**, then clear data and restart.
+After ``/health`` clears (plus settle), assert App Software Version matches Robot
+server version (UI and ``/health`` ``api_version``). Selectable in ``make ui`` as
+**Device Reset, then app/robot versions match**.
 
 **Page object:** `RobotSettingsPage.reset_all_except_ssh()`
 

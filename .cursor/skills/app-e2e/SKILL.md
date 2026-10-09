@@ -73,6 +73,7 @@ Protocol Designer / Labware Library suites are **not** in this workspace (see mo
 - Prefer `get_by_role` / `get_by_test_id` / `get_by_text` over CSS/XPath
 - Wait with Playwright `expect` or page-object helpers — avoid `time.sleep()`
 - Type-annotate public helpers; keep tests independent (no shared mutable state)
+- App tests get `@pytest.mark.dismiss_blockers` by default: on `Locator.click` timeout, snapshot → dismiss blocking toasts → retry once. Opt out with `@pytest.mark.no_dismiss_blockers`.
 
 ### Example
 

@@ -48,3 +48,8 @@ def has_device_details_tabs(version: Version) -> bool:
     if version > DEVICE_DETAILS_TABS_AFTER:
         return True
     return version.major == 4
+
+
+def versions_match(left: str, right: str) -> bool:
+    """Return True when two UI/API version strings parse to the same Version."""
+    return parse_app_version(left) == parse_app_version(right)

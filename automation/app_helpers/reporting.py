@@ -1,13 +1,16 @@
 """Test result directories, tracing, and artifact paths for pytest-html reports.
 
-Artifacts land under ``test-results/YYYY-MM/YYYY-MM-DD/`` so runs are grouped by
-month and day. ``test-results/latest`` is a symlink to today's day folder.
+Each pytest session writes under ``test-results/YYYY-MM/YYYY-MM-DD/HH-MM-SS/``
+so runs are grouped by date and wall-clock time (not ``test_foo_1``, ``_2``, …).
+Only the two most recent timed runs are kept per day. ``test-results/latest``
+symlinks to the active run folder.
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -20,8 +23,12 @@ from playwright.sync_api import Error as PlaywrightError
 from automation.app_helpers.screencast_recorder import ScreencastRecorder, concat_mp4s
 
 TEST_RESULTS_ROOT = Path("test-results")
+MAX_RUNS_PER_DAY = 2
 _ARTIFACT_SUBDIRS = ("videos", "traces", "screenshots", "pw-artifacts")
+_RUN_DIR_NAME = re.compile(r"^\d{2}-\d{2}-\d{2}(_\d+)?$")
 _workflow_segments: dict[str, list[Path]] = {}
+_session_videos: list[Path] = []
+_active_run_dir: Path | None = None
 
 
 def results_day_dir(day: date | None = None) -> Path:
@@ -30,57 +37,115 @@ def results_day_dir(day: date | None = None) -> Path:
     return TEST_RESULTS_ROOT / d.strftime("%Y-%m") / d.strftime("%Y-%m-%d")
 
 
+def results_run_dir(day: date | None = None) -> Path:
+    """Return the active timed run folder for this process (creating one if needed)."""
+    if _active_run_dir is not None:
+        return _active_run_dir
+    return ensure_test_results_dir(day)
+
+
 def videos_dir(day: date | None = None) -> Path:
-    """Videos subdirectory for the given day."""
-    return results_day_dir(day) / "videos"
+    """Videos subdirectory for the active run."""
+    return results_run_dir(day) / "videos"
 
 
 def traces_dir(day: date | None = None) -> Path:
-    """Traces subdirectory for the given day."""
-    return results_day_dir(day) / "traces"
+    """Traces subdirectory for the active run."""
+    return results_run_dir(day) / "traces"
 
 
 def screenshots_dir(day: date | None = None) -> Path:
-    """Screenshots subdirectory for the given day."""
-    return results_day_dir(day) / "screenshots"
+    """Screenshots subdirectory for the active run."""
+    return results_run_dir(day) / "screenshots"
 
 
 def report_html_path(day: date | None = None) -> Path:
-    """pytest-html report path for the given day."""
-    return results_day_dir(day) / "report.html"
+    """pytest-html report path for the active run."""
+    return results_run_dir(day) / "report.html"
 
 
 def app_console_log_path(day: date | None = None) -> Path:
-    """Electron console log path for the given day."""
-    return results_day_dir(day) / "app-console.log"
+    """Electron console log path for the active run."""
+    return results_run_dir(day) / "app-console.log"
 
 
 def path_relative_to_report(artifact: Path, day: date | None = None) -> str:
-    """Return a path to ``artifact`` relative to that day's ``report.html`` directory."""
-    day_dir = results_day_dir(day).resolve()
+    """Return a path to ``artifact`` relative to the active run's ``report.html`` directory."""
+    run_dir = results_run_dir(day).resolve()
     try:
-        return artifact.resolve().relative_to(day_dir).as_posix()
+        return artifact.resolve().relative_to(run_dir).as_posix()
     except ValueError:
         return artifact.as_posix()
 
 
-def ensure_test_results_dir(day: date | None = None) -> Path:
-    """Create today's (or ``day``'s) result tree and refresh ``test-results/latest``."""
-    day_dir = results_day_dir(day)
-    for name in _ARTIFACT_SUBDIRS:
-        (day_dir / name).mkdir(parents=True, exist_ok=True)
+def _is_timed_run_dir(name: str) -> bool:
+    return bool(_RUN_DIR_NAME.fullmatch(name))
 
+
+def list_timed_run_dirs(day_dir: Path) -> list[Path]:
+    """Return timed run folders under ``day_dir``, oldest first."""
+    if not day_dir.is_dir():
+        return []
+    runs = [path for path in day_dir.iterdir() if path.is_dir() and _is_timed_run_dir(path.name)]
+    return sorted(runs, key=lambda path: path.name)
+
+
+def prune_old_runs(day_dir: Path, keep: int = MAX_RUNS_PER_DAY) -> list[Path]:
+    """Delete timed runs beyond ``keep`` newest; return removed paths."""
+    runs = list_timed_run_dirs(day_dir)
+    if keep < 0:
+        keep = 0
+    removed: list[Path] = []
+    for old in runs[:-keep] if keep else runs:
+        shutil.rmtree(old, ignore_errors=True)
+        removed.append(old)
+    return removed
+
+
+def _refresh_latest_symlink(run_dir: Path) -> None:
     TEST_RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     latest = TEST_RESULTS_ROOT / "latest"
-    target = day_dir.relative_to(TEST_RESULTS_ROOT)
+    target = run_dir.relative_to(TEST_RESULTS_ROOT)
     try:
         if latest.is_symlink() or latest.exists():
             latest.unlink()
         latest.symlink_to(target)
     except OSError:
-        # Symlinks can fail on some filesystems; day dirs still work.
+        # Symlinks can fail on some filesystems; run dirs still work.
         pass
-    return day_dir
+
+
+def ensure_test_results_dir(day: date | None = None) -> Path:
+    """Create (or reuse) this session's timed run folder; keep only two runs per day."""
+    global _active_run_dir
+
+    day_dir = results_day_dir(day)
+    day_dir.mkdir(parents=True, exist_ok=True)
+
+    if _active_run_dir is not None:
+        try:
+            if _active_run_dir.resolve().parent == day_dir.resolve():
+                for name in _ARTIFACT_SUBDIRS:
+                    (_active_run_dir / name).mkdir(parents=True, exist_ok=True)
+                _refresh_latest_symlink(_active_run_dir)
+                return _active_run_dir
+        except OSError:
+            _active_run_dir = None
+
+    stamp = datetime.now().strftime("%H-%M-%S")
+    run_dir = day_dir / stamp
+    counter = 1
+    while run_dir.exists():
+        run_dir = day_dir / f"{stamp}_{counter}"
+        counter += 1
+
+    for name in _ARTIFACT_SUBDIRS:
+        (run_dir / name).mkdir(parents=True, exist_ok=True)
+
+    prune_old_runs(day_dir, keep=MAX_RUNS_PER_DAY)
+    _refresh_latest_symlink(run_dir)
+    _active_run_dir = run_dir
+    return run_dir
 
 
 # Back-compat aliases used by older call sites (resolve to *today* at import time
@@ -99,7 +164,7 @@ def slugify_nodeid(nodeid: str) -> str:
 
 
 def unique_artifact_path(directory: Path, slug: str, suffix: str) -> Path:
-    """Return ``directory/slug{suffix}``, appending ``_N`` when the path exists."""
+    """Return ``directory/slug{suffix}``, appending ``_N`` only within the same run."""
     directory.mkdir(parents=True, exist_ok=True)
     destination = directory / f"{slug}{suffix}"
     counter = 1
@@ -194,6 +259,35 @@ def finalize_workflow_video(nodeid: str, slug: str) -> Path | None:
         return parts[0]
     saved = concat_mp4s(parts, unique_artifact_path(videos_dir(), slug, ".mp4"))
     return saved or parts[-1]
+
+
+def register_session_video(path: Path) -> None:
+    """Remember a per-test video so the suite can stitch them after the run."""
+    if path not in _session_videos:
+        _session_videos.append(path)
+
+
+def take_session_videos() -> list[Path]:
+    """Remove and return videos registered for this pytest session."""
+    videos = list(_session_videos)
+    _session_videos.clear()
+    return videos
+
+
+def finalize_session_suite_video(*, slug: str = "app_suite") -> Path | None:
+    """Join every headed per-test video from this session into one mp4.
+
+    Individual test clips are kept; the suite file is written beside them.
+    """
+    parts = [path for path in take_session_videos() if path.exists()]
+    if not parts:
+        return None
+    ensure_test_results_dir()
+    destination = unique_artifact_path(videos_dir(), slug, ".mp4")
+    if len(parts) == 1:
+        shutil.copy2(parts[0], destination)
+        return destination
+    return concat_mp4s(parts, destination, keep_parts=True)
 
 
 def start_test_recording(

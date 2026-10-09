@@ -87,17 +87,15 @@ def test_diagnostic_files(run_local_app: Page, robot_name: str) -> None:
         else rows[0]
     )
     log_step(f"Select '{target}' and Download selected")
-    files.prepare_downloads()
-    diagnostics.download_file_type(target)
-    files.wait_for_download_success()
-    log_done(f"Downloaded diagnostic file '{target}'")
+    zip_path = files.complete_diagnostic_download(diagnostics, target)
+    log_done(f"Downloaded diagnostic file '{target}' → {zip_path.name}")
 
 
 @pytest.mark.workflow(
     group="robot_settings",
-    section="Calibration",
+    section="File manager",
     label="Download calibration logs",
-    order=20,
+    order=70,
     requires=ROBOT_DETAIL_REQUIRED,
 )
 def test_download_calibration_logs(run_local_app: Page, robot_name: str) -> None:
@@ -113,7 +111,5 @@ def test_download_calibration_logs(run_local_app: Page, robot_name: str) -> None
         pytest.skip("No calibration log rows listed in File manager diagnostics.")
     target = calibration_rows[0]
     log_step(f"Select '{target}' and Download selected")
-    files.prepare_downloads()
-    diagnostics.download_file_type(target)
-    files.wait_for_download_success()
-    log_done(f"Downloaded '{target}'")
+    zip_path = files.complete_diagnostic_download(diagnostics, target)
+    log_done(f"Downloaded '{target}' → {zip_path.name}")

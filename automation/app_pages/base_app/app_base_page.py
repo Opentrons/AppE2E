@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from playwright.sync_api import Page, expect
 
+from automation.app_helpers.app_readiness import dismiss_blocking_toasts
 from automation.base_page import BasePage
 
 
@@ -16,14 +17,11 @@ class AppBasePage(BasePage):
 
     def dismiss_warning_toast(self) -> None:
         """Dismiss a warning toast if present (it can block clicks)."""
+        if not dismiss_blocking_toasts(self.page):
+            return
         toast = self.page.get_by_test_id("Toast_warning")
-        if toast.count() == 0:
-            return
-        close = toast.locator("button").first
-        if not close.is_visible():
-            return
-        close.click()
-        expect(toast).to_be_hidden(timeout=5_000)
+        if toast.count() > 0:
+            expect(toast.first).to_be_hidden(timeout=5_000)
 
     def close_slideout_by_title(self, title: str) -> None:
         """Dismiss a slideout (app 4.x has no Slideout_title_* test ids)."""

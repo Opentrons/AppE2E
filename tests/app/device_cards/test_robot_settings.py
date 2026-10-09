@@ -10,26 +10,30 @@ TODO(T69751): Pause protocol when robot door opens — OT-2 only; not exercised 
 
 from __future__ import annotations
 
-from collections.abc import Generator
-
 import pytest
 from playwright.sync_api import Page
 
+from automation.app_helpers.app_version import parse_app_version, versions_match
 from automation.app_helpers.robot_connection import RobotConnection
 from automation.app_helpers.test_progress import log_done, log_step
-from automation.app_pages import DevicesPage, RobotSettingsPage
+from automation.app_pages import AppSettingsPage, DevicesPage, RobotSettingsPage
 
 ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_detail_from_devices_list"
 
 
 @pytest.fixture(scope="session")
-def robot_settings(run_local_app: Page, robot_name: str) -> Generator[RobotSettingsPage, None, None]:
-    """Navigate once to Robot Settings for the configured robot."""
+def _robot_settings_page(run_local_app: Page, robot_name: str) -> RobotSettingsPage:
+    """Shared Robot Settings page object (navigation happens per test, while video records)."""
+    return RobotSettingsPage(run_local_app, robot_name=robot_name)
+
+
+@pytest.fixture
+def robot_settings(_robot_settings_page: RobotSettingsPage, robot_name: str) -> RobotSettingsPage:
+    """Open Robot Settings inside each test so headed video includes the navigation."""
     log_step(f"Open Robot Settings for '{robot_name}'")
-    page = RobotSettingsPage(run_local_app, robot_name=robot_name)
-    page.navigate()
+    _robot_settings_page.navigate()
     log_done(f"Robot Settings loaded ({robot_name})")
-    yield page
+    return _robot_settings_page
 
 
 @pytest.mark.workflow(
@@ -223,7 +227,7 @@ def test_analytics(robot_settings: RobotSettingsPage) -> None:
 @pytest.mark.workflow(
     group="robot_settings",
     section="Advanced",
-    label="Device Reset",
+    label="Device Reset, then app/robot versions match",
     order=130,
     requires=ROBOT_DETAIL_REQUIRED,
     cases=(("T69755", "Device Reset"),),
@@ -236,8 +240,8 @@ def test_advanced_device_reset(
     """T69755: Robot Settings > Advanced > Device Reset (all except SSH keys).
 
     Restarts the robot; keep this last in the robot_settings group. After the
-    UI confirms, wait for ``/health`` plus a settle period so later suites
-    (file manager, cards, deck config) do not race the reboot.
+    UI confirms, wait for ``/health`` plus a settle period, then assert the
+    desktop App Software Version matches Robot server version (UI + ``/health``).
     """
     log_step("Device Reset: select all except SSH public keys, then restart")
     settings = RobotSettingsPage(run_local_app, robot_name=robot_name)
@@ -245,5 +249,37 @@ def test_advanced_device_reset(
     log_done("Device reset confirmed; landed on Devices")
 
     log_step("Wait for robot /health after device reset, then settle 2 minutes")
-    robot_connection.wait_for_ready_after_reset()
+    health = robot_connection.wait_for_ready_after_reset()
     log_done("Robot healthy again after device reset")
+
+    api_version = str(health.get("api_version") or health.get("api_Version") or "").strip()
+    if not api_version:
+        raise AssertionError(f"/health cleared but api_version missing: {health!r}")
+
+    log_step("Read App Software Version and Robot server version after health clears")
+    app_raw = AppSettingsPage(run_local_app).read_app_software_version()
+    # Prefer the configured name; fall back to /health name if reset renamed the robot.
+    health_name = str(health.get("name") or "").strip()
+    settings = RobotSettingsPage(run_local_app, robot_name=robot_name)
+    try:
+        robot_ui = settings.read_robot_server_version()
+    except Exception:
+        if not health_name or health_name == robot_name:
+            raise
+        log_step(f"Robot not found as {robot_name!r}; retrying as /health name {health_name!r}")
+        settings = RobotSettingsPage(run_local_app, robot_name=health_name)
+        robot_ui = settings.read_robot_server_version()
+    log_done(f"App={app_raw!r}, Robot UI={robot_ui!r}, /health api_version={api_version!r}")
+
+    log_step("Assert app and robot server versions are the same")
+    if not versions_match(app_raw, api_version):
+        raise AssertionError(
+            f"App Software Version {app_raw!r} ({parse_app_version(app_raw)}) does not match "
+            f"/health api_version {api_version!r} ({parse_app_version(api_version)})"
+        )
+    if not versions_match(app_raw, robot_ui):
+        raise AssertionError(
+            f"App Software Version {app_raw!r} ({parse_app_version(app_raw)}) does not match "
+            f"Robot server version {robot_ui!r} ({parse_app_version(robot_ui)})"
+        )
+    log_done(f"App and robot server versions match ({parse_app_version(app_raw)})")

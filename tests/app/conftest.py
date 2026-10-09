@@ -17,12 +17,15 @@ import bootstrap  # noqa: F401
 import open_app
 from automation.app_helpers.app_version import has_device_details_tabs, parse_app_version
 from automation.app_helpers.dev_robot_setup import ensure_localhost_robot_discovered, wait_for_robot_server
+from automation.app_helpers.dismiss_blockers import install_click_dismiss_fallback
 from automation.app_helpers.left_nav import navigate_to
 from automation.app_helpers.reporting import (
     app_console_log_path,
     capture_failure_screenshot,
     ensure_test_results_dir,
+    finalize_session_suite_video,
     path_relative_to_report,
+    register_session_video,
     slugify_nodeid,
     start_test_recording,
     stop_test_recording,
@@ -270,6 +273,28 @@ def _headed_bring_app_to_front(request: pytest.FixtureRequest, run_local_app: Pa
 
 
 @pytest.fixture(autouse=True)
+def _dismiss_blockers_on_click_timeout(
+    request: pytest.FixtureRequest, run_local_app: Page
+) -> Generator[None, None, None]:
+    """When marked ``dismiss_blockers``, retry clicks after dismissing blocking toasts.
+
+    On ``Locator.click`` timeout: snapshot the UI, close warning/info toasts that
+    intercept pointer events, then retry the same click once. Opt out with
+    ``@pytest.mark.no_dismiss_blockers``.
+    """
+    if request.node.get_closest_marker("no_dismiss_blockers") is not None:
+        yield
+        return
+    if request.node.get_closest_marker("dismiss_blockers") is None:
+        yield
+        return
+    with install_click_dismiss_fallback(run_local_app, nodeid=request.node.nodeid) as snapshots:
+        yield
+        for path in snapshots:
+            request.node.user_properties.append(("screenshot_blocker", str(path)))
+
+
+@pytest.fixture(autouse=True)
 def _record_test_artifacts(request: pytest.FixtureRequest, run_local_app: Page) -> Generator[None, None, None]:
     """Record a per-test trace and, in headed runs, an mp4 of the whole test."""
     slug = slugify_nodeid(request.node.nodeid)
@@ -289,6 +314,7 @@ def _record_test_artifacts(request: pytest.FixtureRequest, run_local_app: Page) 
         log_path("Playwright trace", artifacts.trace_path, kind="trace")
     if artifacts.video_path is not None:
         request.node.user_properties.append(("video_path", str(artifacts.video_path)))
+        register_session_video(artifacts.video_path)
         log_path("Playwright video", artifacts.video_path, kind="video")
 
 
@@ -309,6 +335,7 @@ _SCREENSHOT_PROPERTY_LABELS = {
     "screenshot_middle": "Middle",
     "screenshot_end": "End",
     "screenshot_path": "Failure",
+    "screenshot_blocker": "Blocker (pre-dismiss)",
 }
 
 
@@ -371,18 +398,20 @@ _MODULE_ORDER = (
     "nav/test_run_setup.py",
 )
 
-# Within calibration: status checks, then per-instrument wizards.
+# Fallback when a calibration test has no workflow ``order``.
 # Device reset is manual — see comment in calibration/test_calibration.py.
 _CALIBRATION_TEST_ORDER = (
     "test_calibration_flow",
     "test_calibration_overflow_menu",
     "test_96_channel_calibration",
+    "test_deck_configuration_before_modules",
     "test_heater_shaker_calibration",
     "test_temperature_module_calibration",
     "test_thermocycler_calibration",
 )
 
 # Within robot settings: T69745–T69756 plan order (not alphabetical nodeid).
+# Device Reset last — restarts the robot and checks app/robot versions after /health.
 _ROBOT_SETTINGS_TEST_ORDER = (
     "test_calibration_about_calibration",
     "test_calibration_pipette_calibrations",
@@ -396,6 +425,7 @@ _ROBOT_SETTINGS_TEST_ORDER = (
     "test_advanced_update_robot_software",
     "test_advanced_robot_server_reinstall",
     "test_analytics",
+    "test_advanced_device_reset",
 )
 
 _ABR_SUITE_DIR = "abr_orchestration"
@@ -417,6 +447,17 @@ def _module_relpath(item: pytest.Item) -> str:
     return "/".join(item.path.parts[-2:])
 
 
+def _workflow_order(item: pytest.Item) -> int | None:
+    """Return the workflow ``order`` mark, including marks on parametrized cases."""
+    marker = item.get_closest_marker("workflow")
+    if marker is None:
+        return None
+    order = marker.kwargs.get("order")
+    if isinstance(order, bool) or not isinstance(order, int):
+        return None
+    return order
+
+
 def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config, items: list[pytest.Item]) -> None:
     """Order the app suite and keep ABR out of mixed ``tests/app/`` runs."""
     del session
@@ -425,11 +466,21 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
     if not app_items:
         return
 
+    # Default: snapshot + toast dismiss + click retry for all app tests.
+    dismiss_mark = pytest.mark.dismiss_blockers
+    for item in app_items:
+        if item.get_closest_marker("no_dismiss_blockers") is not None:
+            continue
+        if item.get_closest_marker("dismiss_blockers") is None:
+            item.add_marker(dismiss_mark)
+
     abr_items = [item for item in app_items if _is_abr_test(item)]
     non_abr_app_items = [item for item in app_items if not _is_abr_test(item)]
     # Deselect ABR when other app suites are also collected (full ``test-app``).
     # Dedicated ``make run_abr_2_and_4`` only collects ABR, so those stay.
-    if abr_items and non_abr_app_items:
+    # Keep ABR when exporting the UI catalog (``--e2e-manifest``).
+    exporting_catalog = getattr(config.option, "e2e_manifest", None)
+    if abr_items and non_abr_app_items and not exporting_catalog:
         config.hook.pytest_deselected(items=abr_items)
         items[:] = [item for item in items if not _is_abr_test(item)]
         app_items = non_abr_app_items
@@ -440,16 +491,22 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
     unknown_module = len(_MODULE_ORDER)
     unknown_calibration = len(_CALIBRATION_TEST_ORDER)
     unknown_robot_settings = len(_ROBOT_SETTINGS_TEST_ORDER)
+    # Nodeid order is alphabetical, so ``test_protocol_run_header`` would run
+    # before ``test_protocol_run_tabs``. Workflow ``order`` is the sequence.
+    collected_at = {id(item): index for index, item in enumerate(items)}
 
-    def sort_key(item: pytest.Item) -> tuple[int, int, str]:
+    def sort_key(item: pytest.Item) -> tuple[int, int, int]:
         module = _module_relpath(item)
-        if module == "calibration/test_calibration.py":
+        workflow_order = _workflow_order(item)
+        if workflow_order is not None:
+            test_rank = workflow_order
+        elif module == "calibration/test_calibration.py":
             test_rank = calibration_rank.get(item.name, unknown_calibration)
         elif module == "device_cards/test_robot_settings.py":
             test_rank = robot_settings_rank.get(item.name, unknown_robot_settings)
         else:
             test_rank = 0
-        return (module_rank.get(module, unknown_module), test_rank, item.nodeid)
+        return (module_rank.get(module, unknown_module), test_rank, collected_at[id(item)])
 
     app_indices = [index for index, item in enumerate(items) if _is_app_test(item)]
     ordered = sorted((items[index] for index in app_indices), key=sort_key)
@@ -459,5 +516,11 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Ensure artifact directories exist before pytest-html writes the report."""
+    """Ensure artifact dirs exist, then stitch headed per-test videos into one suite mp4."""
+    del session, exitstatus
     ensure_test_results_dir()
+    suite_video = finalize_session_suite_video()
+    if suite_video is not None:
+        from automation.app_helpers.test_progress import log_path
+
+        log_path("Suite video (all tests)", suite_video, kind="video")

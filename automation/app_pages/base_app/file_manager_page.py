@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
-from automation.app_helpers.download_collisions import clear_file_manager_downloads
+from automation.app_helpers.download_collisions import (
+    DEFAULT_DOWNLOADS_DIR,
+    prepare_file_manager_downloads,
+)
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.robot_settings_page import RobotSettingsPage
 from automation.app_pages.components import BasicButton, ListAccordion, RowCheckbox, StatusChip
@@ -54,19 +59,18 @@ class FileSection:
     def select_all(self) -> None:
         self.select_all_checkbox.check()
 
+    def download_button(self) -> Locator:
+        """Visible Download selected control for this section."""
+        by_test_id = BasicButton(self.root, "Download selected").locator
+        by_role = self.root.get_by_role("button", name="Download selected")
+        return by_test_id.or_(by_role).first
+
     def download(self) -> None:
-        button = BasicButton(self.header, "Download selected")
-        expect(button.locator).to_be_visible()
+        button = self.download_button()
+        expect(button).to_be_visible()
+        expect(button).to_be_enabled()
+        button.scroll_into_view_if_needed()
         button.click()
-
-
-def prepare_file_manager_downloads(robot_name: str) -> None:
-    """Clear stable Download filenames so Electron won't show a Replace sheet.
-
-    Call before Download selected or Delete selected (delete re-downloads first).
-    Native OS conflict dialogs are invisible to Playwright/Stagewright.
-    """
-    clear_file_manager_downloads(robot_name)
 
 
 def _section_by_title(page: Page, title: str) -> Locator:
@@ -168,13 +172,16 @@ class FileManagerPage(AppBasePage):
 
     FILE_CAPACITY_LABEL = "File capacity"
     ROBOT_STORAGE = "Robot Storage"
+    DOWNLOAD_IN_PROGRESS = "Downloading diagnostic files"
     DOWNLOAD_SUCCESS = "Files successfully downloaded"
-    # Robot log zips can take a while over the lab network.
-    DOWNLOAD_TIMEOUT_MS = 120_000
+    # Parallel robot log fetches are usually ~15–40s; allow headroom for lab Wi‑Fi.
+    # Keep under the suite's 300s per-test timeout.
+    DOWNLOAD_TIMEOUT_MS = 240_000
 
     def __init__(self, page: Page, *, robot_name: str) -> None:
         super().__init__(page)
         self.robot_name = robot_name
+        self._downloads_dir = DEFAULT_DOWNLOADS_DIR
 
     @property
     def file_manager_url(self) -> re.Pattern[str]:
@@ -201,9 +208,17 @@ class FileManagerPage(AppBasePage):
         expect(self.root).to_be_visible()
         expect(self.page.get_by_text(self.ROBOT_STORAGE, exact=True)).to_be_visible()
 
-    def prepare_downloads(self) -> None:
-        """Remove existing Downloads targets for this robot before save/delete."""
-        prepare_file_manager_downloads(self.robot_name)
+    def prepare_downloads(self) -> Path:
+        """Clear collision files and route saves to Downloads (no OS Save picker)."""
+        self._downloads_dir = prepare_file_manager_downloads(self.page, self.robot_name)
+        return self._downloads_dir
+
+    def wait_for_download_started(self, *, timeout: float = 15_000) -> None:
+        """Fail fast if Download selected never kicked off the in-progress toast."""
+        toast = self.page.get_by_test_id("Toast_info").filter(
+            has_text=self.DOWNLOAD_IN_PROGRESS
+        )
+        expect(toast).to_be_visible(timeout=timeout)
 
     def wait_for_download_success(self, *, timeout: float | None = None) -> None:
         """Wait for the success toast after Download selected."""
@@ -213,6 +228,60 @@ class FileManagerPage(AppBasePage):
         expect(toast).to_be_visible(
             timeout=self.DOWNLOAD_TIMEOUT_MS if timeout is None else timeout
         )
+
+    def expect_download_file(self, filename: str, *, timeout: float | None = None) -> Path:
+        """Wait until ``filename`` exists and is non-empty under the prepared Downloads dir."""
+        path = self._downloads_dir / filename
+        deadline_ms = self.DOWNLOAD_TIMEOUT_MS if timeout is None else timeout
+        end = time.monotonic() + (deadline_ms / 1000.0)
+        while time.monotonic() < end:
+            if path.is_file() and path.stat().st_size > 0:
+                return path
+            self.page.wait_for_timeout(250)
+        raise AssertionError(f"Expected downloaded file at {path}")
+
+    def _wait_for_destination_intercept(self, *, timeout: float = 15_000) -> dict:
+        """Info toast is painted before IPC; wait until destination injection is observed."""
+        self.page.wait_for_function(
+            """() => {
+              const calls = window.__otSaveDirIntercepts || []
+              return calls.some(
+                (call) =>
+                  typeof call.destination === "string" && call.destination.length > 0
+              )
+            }""",
+            timeout=timeout,
+        )
+        intercepts = self.page.evaluate("() => window.__otSaveDirIntercepts || []")
+        return next(
+            call
+            for call in reversed(intercepts)
+            if call.get("destination")
+        )
+
+    def complete_diagnostic_download(
+        self,
+        diagnostics: DiagnosticFilesSection,
+        name: str,
+        *,
+        expected_file: str | None = None,
+    ) -> Path:
+        """Select a filetype, click Download, and wait until the file is written.
+
+        Defaults ``expected_file`` to ``{robot}_logs.zip`` for Troubleshooting Logs,
+        otherwise ``{robot}-calibration.json``.
+        """
+        if expected_file is None:
+            if name == DiagnosticFilesSection.TROUBLESHOOTING_LOGS:
+                expected_file = f"{self.robot_name}_logs.zip"
+            else:
+                expected_file = f"{self.robot_name}-calibration.json"
+        self.prepare_downloads()
+        diagnostics.download_file_type(name)
+        self.wait_for_download_started()
+        self._wait_for_destination_intercept()
+        self.wait_for_download_success()
+        return self.expect_download_file(expected_file, timeout=5_000)
 
     def capacity(self) -> StorageCapacity:
         """Read the Robot Storage File capacity meter."""

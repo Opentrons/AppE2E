@@ -21,12 +21,10 @@ ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_
     label="Left pipette card",
     order=30,
     requires=ROBOT_DETAIL_REQUIRED,
+    cases=(("T70399", "Pipette App: About Pipette"),),
 )
 def test_left_pipette_card(device_cards: DeviceCardsPage) -> None:
-    """Exercise the left or combined left+right pipette card when present.
-
-    Not mapped to a Robot Settings T case (T69745–T69756).
-    """
+    """Exercise the left or combined left+right pipette card when present."""
     if device_cards.has_dual_mount_pipette_card():
         log_step("Check 96-channel pipette card (left+right mounts)")
         log_step("Exercise left+right pipette card controls")
@@ -49,12 +47,10 @@ def test_left_pipette_card(device_cards: DeviceCardsPage) -> None:
     label="Right pipette card",
     order=40,
     requires=ROBOT_DETAIL_REQUIRED,
+    cases=(("T70399", "Pipette App: About Pipette"),),
 )
 def test_right_pipette_card(device_cards: DeviceCardsPage) -> None:
-    """Exercise the right pipette card when a separate right mount exists.
-
-    Not mapped to a Robot Settings T case (T69745–T69756).
-    """
+    """Exercise the right pipette card when a separate right mount exists."""
     if device_cards.has_dual_mount_pipette_card():
         log_step("96-channel pipette uses a combined left+right card — skipping")
         pytest.skip("96-channel pipette covered by test_left_pipette_card.")
@@ -74,12 +70,10 @@ def test_right_pipette_card(device_cards: DeviceCardsPage) -> None:
     label="Gripper card",
     order=50,
     requires=ROBOT_DETAIL_REQUIRED,
+    cases=(("T70554", "Gripper App: About Gripper"),),
 )
 def test_gripper_card(device_cards: DeviceCardsPage) -> None:
-    """Exercise the Flex gripper card when the extension mount is present.
-
-    Not mapped to a Robot Settings T case (T69745–T69756).
-    """
+    """Exercise the Flex gripper card when the extension mount is present."""
     log_step("Check gripper (extension mount) card")
     if not device_cards.has_instrument_card("extension mount"):
         log_step("Gripper card not found or disabled — skipping")

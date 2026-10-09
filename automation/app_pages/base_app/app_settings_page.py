@@ -24,12 +24,13 @@ class AppSettingsPage(AppBasePage):
     APP_SOFTWARE_VERSION = "App Software Version"
     SOFTWARE_UPDATE_HEADING = "Software Update"
     UPDATE_ALERT_COPY = re.compile(r"Receive an alert when .+ software update is available\.")
-    ADVANCED_HEADING = "Update Channel"
+    # Sentence-case titles match current app i18n; Title Case kept for older builds.
+    ADVANCED_HEADING = re.compile(r"^Update [Cc]hannel$")
     CUSTOM_LABWARE_HEADING = "Additional Custom Labware Source Folder"
     PREVENT_ROBOT_CACHING = "Prevent Robot Caching"
     CLEAR_UNAVAILABLE_ROBOTS = "Clear Unavailable Robots"
     CLEAR_ROBOTS_BUTTON = "Clear unavailable robots list"
-    DEVELOPER_TOOLS = "Developer Tools"
+    DEVELOPER_TOOLS = re.compile(r"^Developer [Tt]ools$")
     FEATURE_FLAGS_TAB = "Feature Flags"
     SETUP_CONNECTION = "Set up connection"
     ADD_IP_HOSTNAME = "Add IP Address or Hostname"
@@ -135,7 +136,7 @@ class AppSettingsPage(AppBasePage):
     def validate_advanced(self) -> None:
         """Open Advanced and validate every settings section."""
         self._open_tab("Advanced", "advanced")
-        expect(self.page.get_by_text(self.ADVANCED_HEADING, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(self.ADVANCED_HEADING)).to_be_visible()
         expect(self.page.get_by_text(self.CUSTOM_LABWARE_HEADING, exact=True)).to_be_visible()
         change_folder = self.page.get_by_role("button", name="Change labware source folder", exact=True)
         add_folder = self.page.get_by_role("button", name="Add labware source folder", exact=True)
@@ -144,7 +145,7 @@ class AppSettingsPage(AppBasePage):
         expect(self.page.get_by_role("switch", name="disable_robot_cache")).to_be_visible()
         expect(self.page.get_by_text(self.CLEAR_UNAVAILABLE_ROBOTS, exact=True)).to_be_visible()
         expect(self.page.get_by_role("button", name=self.CLEAR_ROBOTS_BUTTON, exact=True)).to_be_visible()
-        expect(self.page.get_by_text(self.DEVELOPER_TOOLS, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(self.DEVELOPER_TOOLS)).to_be_visible()
         expect(self.page.get_by_role("switch", name="enable_dev_tools")).to_be_visible()
 
     def validate_feature_flags(self) -> None:

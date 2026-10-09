@@ -10,6 +10,8 @@ from playwright.sync_api import Locator, Page, expect
 OVERLAY_SELECTOR = '[data-sentry-component="Overlay"]'
 # Current Slideout close control (app/src/atoms/Slideout). Legacy testid kept as fallback.
 SLIDEOUT_CLOSE_SELECTOR = 'button[aria-label="exit"], [data-testid^="Slideout_icon_close_"]'
+TOAST_SELECTOR = '[data-testid^="Toast_"]'
+MODAL_CLOSE_SELECTOR = '[data-testid^="ModalHeader_icon_close_"]'
 LANGUAGE_MODAL_BUTTONS = ("Continue", "Use system language", "Don't change")
 APP_SETTINGS_URL = re.compile(r"#/app-settings")
 # Navbar gear menu debounces navigation by 300ms (see app/src/App/Navbar/index.tsx).
@@ -19,9 +21,20 @@ GEAR_NAV_DEBOUNCE_MS = 350
 def dismiss_blocking_ui(page: Page, *, timeout: float = 15_000) -> None:
     """Close startup modals and slideouts so the app is ready for navigation."""
     _dismiss_language_modals(page)
+    dismiss_blocking_toasts(page)
+    close_visible_modals(page)
     close_visible_slideouts(page)
     click_visible_overlays(page)
     wait_for_overlays_hidden(page, timeout=timeout)
+
+
+def dismiss_pointer_blockers(page: Page) -> bool:
+    """Dismiss toasts that steal clicks without closing intentional slideouts/modals.
+
+    Used by the ``dismiss_blockers`` pytest mark on click timeout. Full nav
+    cleanup stays in ``dismiss_blocking_ui`` / ``click_when_ui_ready``.
+    """
+    return dismiss_blocking_toasts(page)
 
 
 def click_when_ui_ready(page: Page, locator: Locator, *, timeout: float = 15_000) -> None:
@@ -75,6 +88,44 @@ def click_visible_overlays(page: Page, *, timeout_ms: float = 1_000) -> bool:
         except Exception:
             pass
     return clicked_any
+
+
+def dismiss_blocking_toasts(page: Page) -> bool:
+    """Close visible toasts that intercept pointer events. Returns True if any closed."""
+    toasts = page.locator(TOAST_SELECTOR)
+    dismissed_any = False
+    for index in range(toasts.count()):
+        toast = toasts.nth(index)
+        if not toast.is_visible():
+            continue
+        close = toast.get_by_role("button").first
+        if close.count() == 0 or not close.is_visible():
+            continue
+        try:
+            close.click(timeout=2_000)
+            dismissed_any = True
+        except Exception:
+            continue
+    return dismissed_any
+
+
+def close_visible_modals(page: Page, *, timeout_ms: float = 2_000) -> bool:
+    """Click ModalHeader close icons when present. Returns True if any close was attempted."""
+    close_buttons = page.locator(MODAL_CLOSE_SELECTOR)
+    closed_any = False
+    for index in range(close_buttons.count()):
+        close = close_buttons.nth(index)
+        if not close.is_visible():
+            continue
+        closed_any = True
+        try:
+            close.click(timeout=timeout_ms)
+        except Exception:
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+    return closed_any
 
 
 def wait_for_overlays_hidden(page: Page, *, timeout: float) -> None:

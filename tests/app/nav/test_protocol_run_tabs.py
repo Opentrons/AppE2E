@@ -25,6 +25,10 @@ PROTOCOL_RUN_TABS = "tests/app/nav/test_protocol_run_tabs.py::test_protocol_run_
     label="Screenshot protocol run tabs",
     order=10,
     requires=HOME_GANTRY_REQUIRED,
+    cases=(
+        ("C722", "Module controls"),
+        ("C44404", "Devices > Robot > Protocol Run > Module controls"),
+    ),
 )
 def test_protocol_run_tabs(
     run_local_app: Page,

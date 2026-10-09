@@ -11,6 +11,20 @@ from automation.app_pages.odd import OddHomePage, OddProtocolsPage
 
 
 @pytest.mark.odd
+@pytest.mark.workflow(
+    group="odd_protocols",
+    section="Smoke",
+    label="Dashboard, protocols, pin, and delete",
+    order=10,
+    cases=(
+        ("C44419", "Dashboard (ODD)"),
+        ("C44417", "All Protocols (ODD)"),
+        ("C44420", "Protocol Sorting (ODD)"),
+        ("C44418", "Protocol Setup Details"),
+        ("C44416", "Pin a Protocol (ODD)"),
+        ("C44415", "Delete a protocol (ODD)"),
+    ),
+)
 def test_odd_smoke_protocol_flows(run_odd_app: Page, screenshot_helper: ScreenshotHelper) -> None:
     """Exercise ODD dashboard, protocols list/sort, details, pin, and delete-bottom."""
     page = run_odd_app

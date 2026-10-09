@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from automation.ui_runner.workflows import GROUP_BY_ID, WORKFLOW_GROUPS
+from automation.ui_runner.workflows import CATALOG_PATHS, GROUP_BY_ID, WORKFLOW_GROUPS
 
 REQUIRED_WORKFLOW_FIELDS = frozenset({"group", "section", "label", "order"})
 OPTIONAL_WORKFLOW_FIELDS = frozenset({"requires", "cases"})
@@ -65,7 +65,7 @@ def _workflow_metadata(item: pytest.Item, marker: pytest.Mark) -> dict[str, Any]
 def _serialize_item(item: pytest.Item) -> dict[str, Any] | None:
     marker = item.get_closest_marker("workflow")
     if marker is None:
-        if item.nodeid.startswith("tests/app/"):
+        if any(item.nodeid.startswith(f"{path}/") for path in CATALOG_PATHS):
             raise pytest.UsageError(f"{item.nodeid}: missing required workflow marker")
         return None
     metadata = _workflow_metadata(item, marker)

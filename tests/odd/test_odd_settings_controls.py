@@ -15,6 +15,12 @@ _PASSWORD = "testadminpassword"
 
 
 @pytest.mark.odd
+@pytest.mark.workflow(
+    group="odd_settings",
+    section="Robot settings",
+    label="Toggle LEDs, downloads, sleep, and brightness",
+    order=10,
+)
 def test_odd_settings_controls(run_odd_app: Page) -> None:
     """Toggle Status LEDs, automatic downloads, sleep, and brightness, then restore each one."""
     page = run_odd_app
