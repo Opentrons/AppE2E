@@ -139,7 +139,7 @@ flowchart LR
   gripAbout --> tc
   skipGrip --> tc
   tc{"Thermocycler card present?"}
-  tc -->|yes| tcDo["Close lid, set lid to 80 C, set block to 60 C"]
+  tc -->|yes| tcDo["Close lid, set lid to 80 C, set block to 60 C, wait 10 s, set block to 24 C"]
   tc -->|no| skipTc["Skip thermocycler"]
   tcDo --> hs
   skipTc --> hs
@@ -158,7 +158,7 @@ flowchart LR
   lights -->|no| skipLights["Skip lights"]
 ```
 
-In words: a 96-channel pipette uses one combined card and skips the separate right-mount test. Otherwise each mount is opened only when it is present. Gripper, thermocycler, heater-shaker, and temperature module follow the same present-or-skip rule. Thermocycler closes the lid and sets lid 80 C and block 60 C. Heater-shaker sets 40 C, runs a test shake, and toggles the latch. Temperature module sets 4 C. Lights are clicked when the switch is on screen. Plate reader and stacker cards can be discovered in code, and their exercise does nothing.
+In words: a 96-channel pipette uses one combined card and skips the separate right-mount test. Otherwise each mount is opened only when it is present. Gripper, thermocycler, heater-shaker, and temperature module follow the same present-or-skip rule. Thermocycler closes the lid, sets lid 80 C and block 60 C, waits 10 seconds, then sets the block back to 24 C. Heater-shaker sets 40 C, runs a test shake, and toggles the latch. Temperature module sets 4 C. Lights are clicked when the switch is on screen. Plate reader and stacker cards can be discovered in code, and their exercise does nothing.
 
 ## Deck Configuration and Run History
 

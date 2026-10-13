@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import platform
 import re
 import subprocess
 import time
@@ -155,28 +154,17 @@ def _find_linux_executable() -> Path | None:
     return matches[0]
 
 
-def _searched_locations(current_os: str) -> str:
-    if current_os == "darwin":
-        roots = _macos_search_roots()
-        pattern = "Opentrons*.app/Contents/MacOS/Opentrons"
-    elif current_os == "windows":
-        roots = _windows_search_roots()
-        pattern = "Opentrons*.exe"
-    elif current_os == "linux":
-        roots = _linux_search_roots()
-        pattern = "opentrons"
-    else:
-        return current_os
+def _searched_locations() -> str:
+    roots = [*_macos_search_roots(), *_windows_search_roots(), *_linux_search_roots()]
     listed = "\n".join(f"  {root}" for root in roots)
-    return f"{listed}\n(pattern: {pattern})"
+    return f"{listed}\n(Mac app, then Windows .exe, then Linux binary)"
 
 
 def get_opentrons_path() -> str:
-    """Return the Opentrons executable path for this OS.
+    """Return the Opentrons executable path.
 
-    Prefers ``OPENTRONS_APP_PATH`` when set (absolute path to the binary), then
-    searches standard install locations with a name regex so versioned bundles
-    (``Opentrons 8.5.0.app``, etc.) still resolve on other machines.
+    Prefers ``OPENTRONS_APP_PATH`` when set. Otherwise looks for a Mac app,
+    then a Windows executable, then a Linux binary.
     """
     override = os.environ.get("OPENTRONS_APP_PATH", "").strip()
     if override:
@@ -185,21 +173,11 @@ def get_opentrons_path() -> str:
             raise FileNotFoundError(f"OPENTRONS_APP_PATH={path} is not a file")
         return str(path)
 
-    current_os = platform.system().lower()
-    found: Path | None
-    if current_os == "windows":
-        found = _find_windows_executable()
-    elif current_os == "darwin":
-        found = _find_macos_executable()
-    elif current_os == "linux":
-        found = _find_linux_executable()
-    else:
-        raise OSError(f"Unsupported operating system: {platform.system()}")
-
+    found = _find_macos_executable() or _find_windows_executable() or _find_linux_executable()
     if found is None:
         raise FileNotFoundError(
             "Could not find the Opentrons desktop app. Searched:\n"
-            f"{_searched_locations(current_os)}\n"
+            f"{_searched_locations()}\n"
             "Install the app or set OPENTRONS_APP_PATH to the executable."
         )
     return str(found.resolve())

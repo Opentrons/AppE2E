@@ -173,6 +173,13 @@ class ThermocyclerCard(ModuleCard):
             self.page_object._dismiss_blocking_overlays()
             return
         print("  set block temperature to 60")
+        print("  heating for 10 seconds")
+        self.page_object.page.wait_for_timeout(10_000)
+        if not self.set_block_temperature("24"):
+            print("  Skipping return to 24 C — menu item not found.")
+            self.page_object._dismiss_blocking_overlays()
+            return
+        print("  set block temperature to 24")
 
 
 class HeaterShakerCard(ModuleCard):

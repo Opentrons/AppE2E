@@ -24,6 +24,8 @@ from pathlib import Path
 
 from playwright.sync_api import Page
 
+from automation.app_helpers.ffmpeg_setup import tool_executable
+
 # Stashed on the Playwright Browser by ``open_app.connect_playwright``.
 CDP_HTTP_ATTR = "_e2e_cdp_http"
 
@@ -282,10 +284,13 @@ def concat_mp4s(parts: list[Path], video_path: Path, *, keep_parts: bool = False
 
 def probe_duration_seconds(video_path: Path) -> float | None:
     """Return the container duration, or None when ffprobe cannot read it."""
+    ffprobe = tool_executable("ffprobe")
+    if ffprobe is None:
+        return None
     try:
         completed = subprocess.run(
             [
-                "ffprobe",
+                ffprobe,
                 "-v",
                 "error",
                 "-show_entries",
@@ -372,15 +377,16 @@ def _ffconcat_quote(path: Path) -> str:
 
 
 def _run_ffmpeg(video_path: Path, args: list[str]) -> Path | None:
+    ffmpeg = tool_executable("ffmpeg")
+    if ffmpeg is None:
+        print("\n⚠️  ffmpeg is not installed; video was not encoded")
+        return None
     try:
         subprocess.run(
-            ["ffmpeg", "-y", *args, str(video_path)],
+            [ffmpeg, "-y", *args, str(video_path)],
             check=True,
             capture_output=True,
         )
-    except FileNotFoundError:
-        print("\n⚠️  ffmpeg is not installed; video was not encoded")
-        return None
     except subprocess.CalledProcessError as error:
         detail = (error.stderr or b"").decode("utf-8", errors="replace")[-600:]
         print(f"\n⚠️  ffmpeg failed for {video_path.name}: {detail}")

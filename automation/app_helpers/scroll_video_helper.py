@@ -5,6 +5,7 @@ from pathlib import Path
 from playwright.sync_api import Page
 
 from automation.app_helpers.artifacts import ARTIFACTS_DIR
+from automation.app_helpers.ffmpeg_setup import tool_executable
 
 
 class ScrollVideoHelper:
@@ -52,10 +53,13 @@ class ScrollVideoHelper:
     def _encode_video(frames_dir: Path, video_path: Path) -> bool:
         """Encode numbered PNG frames into an mp4 using ffmpeg."""
         video_path.parent.mkdir(parents=True, exist_ok=True)
+        ffmpeg = tool_executable("ffmpeg")
+        if ffmpeg is None:
+            return False
         try:
             subprocess.run(
                 [
-                    "ffmpeg",
+                    ffmpeg,
                     "-y",
                     "-framerate",
                     "5",

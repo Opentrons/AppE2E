@@ -1,4 +1,4 @@
-"""Connect to a robot over USB or Wi-Fi for app E2E test preflight checks."""
+"""Connect to a robot over Wi-Fi, with USB as a fallback, for app E2E preflight checks."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from automation.app_helpers.robot_usb import find_opentrons_usb_port, http_get_o
 
 ROBOT_PORT = 31950
 TIMEOUT = 10.0
-DEFAULT_ROBOT_IP = "10.14.19.194"
+DEFAULT_ROBOT_IP = "10.14.19.167"
 # Factory reset / robot restart can take a long time on Flex hardware.
 DEVICE_RESET_READY_TIMEOUT_S = 1_200.0
 DEVICE_RESET_DOWNTIME_WAIT_S = 90.0
@@ -45,6 +45,7 @@ class RobotConnection:
         """Store USB serial port and/or network IP used for robot-server requests."""
         self.usb_port = usb_port
         self.ip = ip
+        self.last_transport: str | None = None
 
     @property
     def over_usb(self) -> bool:
@@ -71,15 +72,29 @@ class RobotConnection:
             return resp.json()
 
     def _get(self, path: str) -> dict[str, Any]:
-        """GET via the active transport (USB preferred when both are set)."""
+        """GET over the robot IP, then USB if that request fails."""
+        wifi_error: Exception | None = None
+        if self.ip is not None:
+            try:
+                payload = self._get_over_wifi(path, self.ip)
+            except Exception as exc:
+                wifi_error = exc
+                if self.usb_port is None:
+                    raise
+            else:
+                self.last_transport = "wifi"
+                return payload
         if self.usb_port is not None:
             try:
-                return self._get_over_usb(path, self.usb_port)
-            except Exception:
-                if self.ip is None:
-                    raise
-        if self.ip is not None:
-            return self._get_over_wifi(path, self.ip)
+                payload = self._get_over_usb(path, self.usb_port)
+            except Exception as exc:
+                if wifi_error is not None:
+                    raise RuntimeError(
+                        f"Wi-Fi {self.ip} failed ({wifi_error}); USB {self.usb_port} failed ({exc})"
+                    ) from exc
+                raise
+            self.last_transport = "usb"
+            return payload
         raise RuntimeError("RobotConnection has neither usb_port nor ip")
 
     def _network_ip(self) -> str | None:
@@ -95,31 +110,32 @@ class RobotConnection:
         return None
 
     def _probe_health(self) -> dict[str, Any]:
-        """GET ``/health`` via USB and/or Wi-Fi; adopt whichever transport succeeds.
+        """GET ``/health`` over the robot IP, then USB if that address does not answer.
 
         After device reset the original path may stay down (Wi-Fi wiped, USB
         gadget renumbered). Probe both so recovery works either way.
         """
         errors: list[str] = []
 
-        # USB first when we already use it or a gadget is plugged in now.
-        port = find_opentrons_usb_port()
-        if port is not None:
-            try:
-                payload = self._get_over_usb("/health", port)
-                self.usb_port = port
-                return payload
-            except Exception as exc:
-                errors.append(f"usb:{port}:{exc}")
-
         ip = self._network_ip()
         if ip is not None:
             try:
                 payload = self._get_over_wifi("/health", ip)
                 self.ip = ip
+                self.last_transport = "wifi"
                 return payload
             except Exception as exc:
                 errors.append(f"wifi:{ip}:{exc}")
+
+        port = find_opentrons_usb_port()
+        if port is not None:
+            try:
+                payload = self._get_over_usb("/health", port)
+                self.usb_port = port
+                self.last_transport = "usb"
+                return payload
+            except Exception as exc:
+                errors.append(f"usb:{port}:{exc}")
 
         detail = "; ".join(errors) if errors else "no USB gadget and no ROBOT_IP"
         raise RuntimeError(f"/health probe failed ({detail})")
@@ -177,33 +193,21 @@ class RobotConnection:
         return health
 
 
-def _explicit_robot_ip(*, cli_ip: str | None = None) -> str | None:
-    """Return a caller-configured robot IP, or None (do not fall back to default)."""
-    for candidate in ((cli_ip or "").strip(), os.environ.get("ROBOT_IP", "").strip()):
-        if candidate:
-            return candidate
-    return None
-
-
 def connect_robot(default_ip: Optional[str] = None) -> RobotConnection:
-    """USB first; otherwise connect over Wi-Fi. Returns a callable connection.
+    """Connect over the robot IP, with USB as a fallback.
 
-    When USB is present and ``ROBOT_IP`` / ``cli_ip`` is set, both are kept so
-    post-reset health waits can fall back either way.
+    Both transports are kept when a USB gadget is present so a later health
+    check can use USB if the IP stops answering.
     """
-    explicit_ip = _explicit_robot_ip(cli_ip=default_ip)
-    usb_port = find_opentrons_usb_port()
-    if usb_port is not None:
-        connection = RobotConnection(usb_port=usb_port, ip=explicit_ip)
-        connection("/health")
-        via = f"USB ({usb_port})" + (f", Wi-Fi fallback {explicit_ip}" if explicit_ip else "")
-        print(f"Connected over {via}")
-        return connection
-
     ip = resolve_robot_ip(cli_ip=default_ip)
-    connection = RobotConnection(ip=ip)
+    usb_port = find_opentrons_usb_port()
+    connection = RobotConnection(usb_port=usb_port, ip=ip)
     connection("/health")
-    print(f"Connected over network ({ip}:{ROBOT_PORT})")
+    if connection.last_transport == "usb":
+        print(f"Connected over USB ({usb_port}) after {ip}:{ROBOT_PORT} did not answer")
+    else:
+        fallback = f", USB fallback {usb_port}" if usb_port else ""
+        print(f"Connected over network ({ip}:{ROBOT_PORT}{fallback})")
     return connection
 
 

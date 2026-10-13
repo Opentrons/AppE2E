@@ -96,25 +96,15 @@ def _connect_robot_for_tests(
     *,
     cli_ip: str | None = None,
 ) -> RobotConnection:
-    """Connect to USB, localhost, or Wi-Fi robot and verify ``/health``.
-
-    USB connections also keep an explicit ``ROBOT_IP`` / ``--robot-ip`` when
-    set, so ``wait_for_ready_after_reset`` can recover over either transport.
-    """
+    """Connect over the robot IP and verify ``/health``. USB is the fallback."""
     if profile is not None and not profile.require_hardware_connection:
         connection = RobotConnection(ip="127.0.0.1")
         connection("/health")
         return connection
 
-    explicit_ip = (cli_ip or "").strip() or os.environ.get("ROBOT_IP", "").strip() or None
-    usb_port = find_opentrons_usb_port()
-    if usb_port is not None:
-        connection = RobotConnection(usb_port=usb_port, ip=explicit_ip)
-        connection("/health")
-        return connection
-
     ip = resolve_robot_ip(cli_ip=cli_ip)
-    connection = RobotConnection(ip=ip)
+    usb_port = find_opentrons_usb_port()
+    connection = RobotConnection(usb_port=usb_port, ip=ip)
     connection("/health")
     return connection
 
@@ -167,7 +157,7 @@ def robot_connection(
     robot_server_process: subprocess.Popen | None,
     request: pytest.FixtureRequest,
 ) -> RobotConnection:
-    """Connect to the robot over USB, Wi-Fi, or localhost before the app opens the port."""
+    """Connect to the robot over its IP, or USB if that address does not answer."""
     del robot_server_process
     cli_ip = request.config.getoption("--robot-ip")
     return _connect_robot_for_tests(robot_profile, cli_ip=cli_ip)

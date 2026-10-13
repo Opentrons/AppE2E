@@ -9,7 +9,7 @@ HEADED ?=
 PYTEST_ARGS ?=
 PYTEST_HEADED := $(if $(HEADED),HEADED=1,)
 
-.PHONY: setup test-setup format lint typecheck prep check \
+.PHONY: setup test-setup ensure-ffmpeg format lint typecheck prep check \
 	configure-robot check-robot \
 	_pytest-app _app-report-banner \
 	test-app test-app-headed test-app-nav test-app-nav-headed \
@@ -27,8 +27,26 @@ ROBOT_SETTINGS_PATH := \
 
 # --- Setup & quality ---
 
-setup:
+setup: ensure-ffmpeg
 	uv sync --frozen
+
+# Video encoding (screencasts, suite mp4) calls ffmpeg on PATH.
+ensure-ffmpeg:
+	@if command -v ffmpeg >/dev/null 2>&1; then \
+		echo "ffmpeg: already installed"; \
+	elif command -v winget >/dev/null 2>&1; then \
+		echo "ffmpeg: installing with winget"; \
+		winget install --id Gyan.FFmpeg -e --source winget --accept-source-agreements --accept-package-agreements; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "ffmpeg: installing with Homebrew"; \
+		brew install ffmpeg; \
+	elif command -v apt-get >/dev/null 2>&1; then \
+		echo "ffmpeg: installing with apt"; \
+		sudo apt-get update && sudo apt-get install -y ffmpeg; \
+	else \
+		echo "ffmpeg is required for test video encoding. Install it, then re-run make setup."; \
+		exit 1; \
+	fi
 
 test-setup:
 	uv run playwright install chromium --with-deps

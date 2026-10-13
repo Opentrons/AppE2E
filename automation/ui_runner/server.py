@@ -478,6 +478,10 @@ def main() -> None:
 
     import uvicorn
 
+    from automation.app_helpers.ffmpeg_setup import ensure_ffmpeg
+
+    ensure_ffmpeg()
+
     host = "127.0.0.1"
     port = 8000
     url = f"http://{host}:{port}/"

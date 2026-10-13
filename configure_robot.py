@@ -40,7 +40,7 @@ def main() -> int:
         existing.get("ROBOT_NAME", DEFAULT_HARDWARE_ROBOT_NAME),
     )
     robot_ip = _prompt(
-        "Robot IP address (Wi-Fi when USB is unavailable)",
+        "Robot IP address (USB is the fallback)",
         existing.get("ROBOT_IP", DEFAULT_ROBOT_IP),
     )
     protocol_name = _prompt(
