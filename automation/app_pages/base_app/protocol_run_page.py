@@ -6,8 +6,6 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
-from automation.app_helpers.page_helpers import require_helper
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import RoundTabBar, StatusChip
 
@@ -38,13 +36,11 @@ class ProtocolRunPage(AppBasePage):
         *,
         robot_name: str | None = None,
         run_id: str | None = None,
-        shots: ScreenshotHelper | None = None,
     ) -> None:
         """Bind the Playwright page."""
         super().__init__(page)
         self.robot_name = robot_name
         self.run_id = run_id
-        self.shots = shots
 
     def wait_until_open(self, *, timeout_ms: int = 60_000) -> None:
         """Wait until the browser is on a protocol-run details URL."""
@@ -72,16 +68,14 @@ class ProtocolRunPage(AppBasePage):
         """Open one of the five run-page tabs."""
         self.tabs.open(label, slug)
 
-    def capture_all_tabs(self) -> None:
-        """Click each present protocol-run tab and screenshot it."""
-        shots = require_helper(self.shots, "ScreenshotHelper", owner="ProtocolRunPage", method="capture_all_tabs")
+    def open_all_tabs(self) -> None:
+        """Click each protocol-run tab that is present."""
         self.wait_until_open()
         for label, slug in self.TABS:
             tab = self.tabs.tab(label, slug)
             if tab.count() == 0:
                 continue
             self.open_tab(label, slug)
-            shots.capture("protocol_run", slug.replace("-", "_"))
 
     def read_status(self) -> tuple[str, str]:
         """Return the run header status chip variant and text."""

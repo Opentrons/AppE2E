@@ -9,7 +9,6 @@ from typing import Literal
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import click_visible_overlays
-from automation.app_helpers.calibration_photos import capture_calibration_photo
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.robot_settings_page import RobotSettingsPage
 
@@ -127,7 +126,6 @@ class CalibrationHelper(AppBasePage):
         expect(self.page.get_by_text(self.GRIPPER_CALIBRATION, exact=True)).to_be_visible()
         expect(self.page.get_by_text(self.MODULE_CALIBRATION, exact=True)).to_be_visible()
         self.wait_for_calibration_data()
-        capture_calibration_photo("beginning")
 
     def wait_for_calibration_data(self) -> None:
         """Wait until calibration tables or overflow controls are populated."""
@@ -557,11 +555,9 @@ class CalibrationHelper(AppBasePage):
         item = self.start_96_channel_calibration()
         self.click_move_gantry_to_front()
         self.click_begin_calibration()
-        capture_calibration_photo("middle")
         self.wait_for_pipette_calibration_motion(timeout_ms=calibration_timeout_ms)
         self.click_complete_calibration()
         self.last_success_message = self.wait_for_pipette_calibration_success()
-        capture_calibration_photo("end")
         self.click_results_exit()
         return item
 
@@ -688,11 +684,9 @@ class CalibrationHelper(AppBasePage):
         self.click_confirm_placement()
         self.verify_robot_in_motion(next_step=self.page.get_by_role("button", name=self.BEGIN_CALIBRATION))
         self.click_begin_calibration()
-        capture_calibration_photo("middle")
         self.wait_for_module_calibration_motion(timeout_ms=calibration_timeout_ms)
         self.click_complete_calibration()
         self.last_success_message = self.wait_for_module_setup_success()
-        capture_calibration_photo("end")
         self.click_module_setup_finish()
         return item
 

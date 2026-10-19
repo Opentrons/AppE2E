@@ -5,13 +5,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, expect
 
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
 from automation.app_helpers.left_nav import link, navigate_to
 from automation.app_helpers.list_scroll import scroll_until_visible
-from automation.app_helpers.page_helpers import require_helper
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.protocol_overflow_menu import ProtocolOverflowMenu
 
@@ -25,11 +23,6 @@ class ProtocolsPage(AppBasePage):
     PROTOCOL_DETAIL_URL = re.compile(r"#/protocols/.+")
     OVERFLOW_BTN = "ProtocolOverflowMenu_overflowBtn"
     START_SETUP_ITEM = "ProtocolOverflowMenu_run"
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        """Bind the page and optional screenshot helper."""
-        super().__init__(page)
-        self.shots = shots
 
     @property
     def nav_link(self) -> Locator:
@@ -173,14 +166,3 @@ class ProtocolsPage(AppBasePage):
                 continue
             self.tab(tab)
             expect(tab_button).to_be_visible()
-
-    def capture_all_tabs(self) -> None:
-        """Click each present protocol detail tab and screenshot it."""
-        shots = require_helper(self.shots, "ScreenshotHelper", owner="ProtocolsPage", method="capture_all_tabs")
-        for tab in self.PROTOCOL_TABS:
-            tab_button = self.tab_button(tab)
-            if tab_button.count() == 0:
-                continue
-            self.tab(tab)
-            expect(tab_button).to_be_visible()
-            shots.capture("protocols", tab.lower())

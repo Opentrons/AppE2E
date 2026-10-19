@@ -19,7 +19,6 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import AppSettingsPage
 
@@ -35,18 +34,17 @@ from automation.app_pages import AppSettingsPage
         ("T69766", "Software Update Alerts"),
     ),
 )
-def test_general_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
+def test_general_tab(run_local_app: Page) -> None:
     """T69758, T69765, T69766: General tab settings.
 
     Validates connect via IP (T69758), software version/update (T69765), and
     software update alerts toggle (T69766).
     """
     log_step("Open App Settings")
-    settings = AppSettingsPage(run_local_app, shots=screenshot_helper)
+    settings = AppSettingsPage(run_local_app)
     settings.navigate()
     log_step("Validate General tab")
     settings.validate_general()
-    screenshot_helper.capture("app_settings", "general")
     log_done("General tab OK")
 
 
@@ -57,14 +55,13 @@ def test_general_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -
     order=20,
     cases=(("T69848", "Share App Analytics with Opentrons"),),
 )
-def test_privacy_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
+def test_privacy_tab(run_local_app: Page) -> None:
     """T69848: Privacy > Share App Analytics with Opentrons."""
     log_step("Open App Settings")
-    settings = AppSettingsPage(run_local_app, shots=screenshot_helper)
+    settings = AppSettingsPage(run_local_app)
     settings.navigate()
-    log_step("Toggle analytics and screenshot Privacy")
+    log_step("Toggle analytics on Privacy")
     settings.validate_privacy()
-    screenshot_helper.capture("app_settings", "privacy")
     log_done("Privacy tab OK")
 
 
@@ -81,7 +78,7 @@ def test_privacy_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -
         ("T69764", "Enable Developer Tool"),
     ),
 )
-def test_advanced_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
+def test_advanced_tab(run_local_app: Page) -> None:
     """T69760–T69764: Advanced tab settings.
 
     Validates update channel (T69760), custom labware folder (T69761),
@@ -89,11 +86,10 @@ def test_advanced_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) 
     robots (T69763), and developer tools (T69764).
     """
     log_step("Open App Settings")
-    settings = AppSettingsPage(run_local_app, shots=screenshot_helper)
+    settings = AppSettingsPage(run_local_app)
     settings.navigate()
     log_step("Validate Advanced tab")
     settings.validate_advanced()
-    screenshot_helper.capture("app_settings", "advanced")
     log_done("Advanced tab OK")
 
 
@@ -104,15 +100,14 @@ def test_advanced_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) 
     order=40,
     cases=(("T69757", "Feature flags"),),
 )
-def test_feature_flags_tab(run_local_app: Page, screenshot_helper: ScreenshotHelper) -> None:
+def test_feature_flags_tab(run_local_app: Page) -> None:
     """T69757: App Settings > Feature flags."""
     log_step("Open App Settings")
-    settings = AppSettingsPage(run_local_app, shots=screenshot_helper)
+    settings = AppSettingsPage(run_local_app)
     settings.navigate()
     if settings.tab_link(settings.FEATURE_FLAGS_TAB).count() == 0:
         log_step("Feature Flags tab not present — skipping")
         pytest.skip("Feature Flags tab not present.")
     log_step("Validate Feature Flags tab")
     settings.validate_feature_flags()
-    screenshot_helper.capture("app_settings", "feature_flags")
     log_done("Feature Flags tab OK")

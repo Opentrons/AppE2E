@@ -158,9 +158,7 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
     root = Path.cwd().resolve()
     screenshot_keys = {
         "screenshot_path",
-        "screenshot_beginning",
-        "screenshot_middle",
-        "screenshot_end",
+        "screenshot_blocker",
     }
     for name, value in item.user_properties:
         if name not in {"trace_path", "video_path", *screenshot_keys}:

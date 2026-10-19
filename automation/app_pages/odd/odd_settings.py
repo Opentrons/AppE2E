@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, expect
 
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.odd.odd_readings import ProtocolRunRecord
 from automation.app_pages.odd.odd_shell import OddShell
 
@@ -14,10 +13,6 @@ class FileManager_Download(OddShell):
 
     File_manager = "File manager"
     Download = "Download all"
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        super().__init__(page)
-        self.shots = shots
 
     def click_file_manager(self):
         self.page.get_by_text(self.File_manager).click()
@@ -36,10 +31,6 @@ class FileManagerProtocolRunRecord(OddShell):
     PROTOCOL_RUN_RECORDS = "Protocol Run Records"
     NO_RUN_RECORDS = "No run records found"
     _HEADERS = ("Protocol name", "Last run date", "Run status")
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        super().__init__(page)
-        self.shots = shots
 
     def _print_table(self, records: list[ProtocolRunRecord]) -> None:
         """Print protocol name, last run date, and run status as a text table."""
@@ -101,8 +92,6 @@ class FileManagerProtocolRunRecord(OddShell):
         expect(tab.first).to_be_visible(timeout=15_000)
         tab.first.click()
         records = self.read_protocol_run_records()
-        if self.shots is not None:
-            self.shots.capture("protocol_run_records", "table")
         self.back_button.click()
         return records
 
@@ -121,10 +110,6 @@ class NetworkSettings(OddShell):
     SECURITY_TYPE = "Security Type"
     SUBNET_MASK = "Subnet Mask"
     MAC_ADDRESS = "MAC Address"
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        super().__init__(page)
-        self.shots = shots
 
     def detail_value(self, label: str) -> str:
         """Return the text shown beside a details-modal label."""
@@ -164,8 +149,6 @@ class NetworkSettings(OddShell):
         expect(view_details.first).to_be_visible(timeout=15_000)
         view_details.first.click()
         details = self.read_connection_details()
-        if self.shots is not None:
-            self.shots.capture("network_settings", "connection_details")
         self.page.get_by_label("closeIcon").click()
         self.back_button.click()
         return details
@@ -180,10 +163,6 @@ class RobotSystemVersion(OddShell):
 
     ROBOT_SYSTEM_VERSION = "Robot system version"
     CURRENT_VERSION = "Current Version"
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        super().__init__(page)
-        self.shots = shots
 
     def current_version(self) -> str:
         """Return the text shown beside the Current Version label."""
@@ -203,8 +182,6 @@ class RobotSystemVersion(OddShell):
         expect(row.first).to_be_visible(timeout=15_000)
         row.first.click()
         version = self.current_version()
-        if self.shots is not None:
-            self.shots.capture("robot_system_version", "current_version")
         self.back_button.click()
         return version
 
@@ -221,11 +198,6 @@ class LanguageToggle(OddShell):
     CHINESE = "中文"
     HEADER_EN = "Language"
     HEADER_ZH = "语言 (Language)"
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        """Bind the Playwright page and optional screenshot helper."""
-        super().__init__(page)
-        self.shots = shots
 
     def language_row(self) -> Locator:
         """Settings row. The accessible name includes the current language."""
@@ -257,13 +229,9 @@ class LanguageToggle(OddShell):
 
         chinese.click()
         expect(self._header(self.HEADER_ZH)).to_be_visible(timeout=15_000)
-        if self.shots is not None:
-            self.shots.capture("language", "chinese")
 
         english.click()
         expect(self._header(self.HEADER_EN)).to_be_visible(timeout=15_000)
-        if self.shots is not None:
-            self.shots.capture("language", "english")
 
         self.back_button.click()
         expect(row).to_be_visible(timeout=15_000)

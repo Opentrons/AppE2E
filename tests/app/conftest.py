@@ -38,7 +38,6 @@ from automation.app_helpers.robot_profiles import (
     get_robot_profile,
 )
 from automation.app_helpers.robot_usb import find_opentrons_usb_port
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import AppSettingsPage, DevicesPage
 from run_config import is_headed_run
@@ -314,16 +313,7 @@ def protocol_name() -> str:
     return DEFAULT_PROTOCOL_NAME
 
 
-@pytest.fixture(scope="session")
-def screenshot_helper(run_local_app: Page) -> ScreenshotHelper:
-    """Session-scoped helper for saving PNG screenshots under ``artifacts/``."""
-    return ScreenshotHelper(run_local_app)
-
-
 _SCREENSHOT_PROPERTY_LABELS = {
-    "screenshot_beginning": "Beginning",
-    "screenshot_middle": "Middle",
-    "screenshot_end": "End",
     "screenshot_path": "Failure",
     "screenshot_blocker": "Blocker (pre-dismiss)",
 }

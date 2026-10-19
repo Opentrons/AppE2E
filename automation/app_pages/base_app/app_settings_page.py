@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import re
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, expect
 
 from automation.app_helpers.app_readiness import (
     GEAR_NAV_DEBOUNCE_MS,
     click_when_ui_ready,
     dismiss_blocking_ui,
 )
-from automation.app_helpers.page_helpers import require_helper
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import ToggleSwitch
 
@@ -42,11 +40,6 @@ class AppSettingsPage(AppBasePage):
         ("Advanced", "advanced"),
         (FEATURE_FLAGS_TAB, "feature-flags"),
     )
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        """Bind the Playwright page and optional screenshot helper."""
-        super().__init__(page)
-        self.shots = shots
 
     @property
     def nav_link(self) -> Locator:
@@ -161,21 +154,3 @@ class AppSettingsPage(AppBasePage):
         self.validate_privacy()
         self.validate_advanced()
         self.validate_feature_flags()
-
-    def capture_all_tabs(self) -> None:
-        """Validate each App Settings tab and save a screenshot per tab."""
-        shots = require_helper(self.shots, "ScreenshotHelper", owner="AppSettingsPage", method="capture_all_tabs")
-
-        self.navigate()
-        self.validate_general()
-        shots.capture("app_settings", "general")
-
-        self.validate_privacy()
-        shots.capture("app_settings", "privacy")
-
-        self.validate_advanced()
-        shots.capture("app_settings", "advanced")
-
-        if self.tab_link(self.FEATURE_FLAGS_TAB).count() > 0:
-            self.validate_feature_flags()
-            shots.capture("app_settings", "feature_flags")

@@ -7,7 +7,6 @@ import re
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.devices_page import DevicesPage
 from automation.app_pages.components import Banner, RoundTabBar, ToggleSwitch
@@ -162,10 +161,9 @@ class RobotSettingsPage(AppBasePage):
         expect(switch).to_have_attribute("aria-checked", "true")
 
     def validate_calibration_about(self) -> None:
-        """T69745: Calibration > About Calibration. Manual inspection required."""
+        """T69745: Calibration > About Calibration."""
         self.open_tab("Calibration", "calibration")
-        ScreenshotHelper(self.page).capture("robot_settings", "calibration_about")
-        print("Applitoools diff expected, alert if significantly different")
+        expect(self.page.get_by_text(self.ABOUT_CALIBRATION, exact=True)).to_be_visible()
 
     def validate_calibration_pipettes(self) -> None:
         """T69746: Robot Settings > Calibration > Pipette Calibrations.
@@ -186,10 +184,8 @@ class RobotSettingsPage(AppBasePage):
         for item in items:
             log_step(f"Pipette: {item.label} ({item.serial}) — {item.state_label}")
 
-        ScreenshotHelper(self.page).capture("robot_settings", "calibration_pipettes")
-
     def validate_networking(self) -> None:
-        """T69747: Select the Networking RoundTab and capture a screenshot."""
+        """T69747: Select the Networking RoundTab and assert it is the active tab."""
         self.open_tab("Networking", "networking")
         tab = self.page.locator(
             '[data-sentry-component="RoundTab"]'
@@ -197,28 +193,23 @@ class RobotSettingsPage(AppBasePage):
             '[aria-current="page"]'
         )
         expect(tab).to_have_text("Networking")
-        ScreenshotHelper(self.page).capture("robot_settings", "networking")
 
     def validate_privacy(self) -> None:
-        """T69748: Camera tab — enable Camera Status, exercise usage toggles, screenshot.
+        """T69748: Camera tab — enable Camera Status and exercise usage toggles.
 
         Usage Settings (Live video / Error image capture) and Camera Controls are
         only rendered while Camera Status is on — enable first, then exercise them.
         """
-        shots = ScreenshotHelper(self.page)
         self.open_tab("Camera", "camera")
         camera = self.page.locator('[data-sentry-component="RobotSettingsCamera"]')
         expect(camera.get_by_text(self.CAMERA_STATUS, exact=True).first).to_be_visible()
-        shots.capture("robot_settings", "camera")
 
         self._exercise_switch(self.CAMERA_STATUS)
         ToggleSwitch(self.page, self.CAMERA_STATUS).turn_on()
-        shots.capture("robot_settings", "camera_status")
 
         expect(camera.get_by_text(self.USAGE_SETTINGS, exact=True)).to_be_visible()
         self._exercise_camera_usage_switch(self.LIVE_VIDEO)
         self._exercise_camera_usage_switch(self.ERROR_IMAGE_CAPTURE)
-        shots.capture("robot_settings", "camera_usage_toggled")
 
     # Rename slideout rejects the current name (already-exists / not dirty enough).
     RENAME_TEST_SUFFIX = "TEST"

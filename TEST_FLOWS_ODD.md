@@ -5,7 +5,7 @@ What the Flex on-device screen test actually does, written so someone outside th
 Each step is one of three kinds:
 
 - **Checks an outcome.** The test performs the action and requires a visible result.
-- **Opens the screen.** The test reaches the control or takes a screenshot. It does not complete the action.
+- **Opens the screen.** The test reaches the control. It does not complete the action.
 - **Stops early.** The test is skipped, or it passes because the data is absent.
 
 ## How to paste this

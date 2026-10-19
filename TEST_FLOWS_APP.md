@@ -5,7 +5,7 @@ What the desktop app tests actually do, written so someone outside the test code
 Each step is one of three kinds:
 
 - **Checks an outcome.** The test performs the action and requires a visible result.
-- **Opens the screen.** The test reaches the control or takes a screenshot. It does not complete the action.
+- **Opens the screen.** The test reaches the control. It does not complete the action.
 - **Stops early.** The test is skipped, or it passes because the hardware or data is absent.
 
 `tests/test_ui_runner.py` checks the internal test runner, not the Opentrons app. `tests/compliance/example_test.py` only pauses so someone can record steps by hand.
@@ -20,14 +20,14 @@ Each step is one of three kinds:
 
 | Area | What the automation does today | Still open |
 | --- | --- | --- |
-| Protocol run | Creates a run, screenshots tabs, logs status and timer, expands each Setup step | Setup is not finished. Start run is not clicked. A run is not watched through success or failure |
+| Protocol run | Creates a run, clicks each tab, logs status and timer, expands each Setup step | Setup is not finished. Start run is not clicked. A run is not watched through success or failure |
 | ABR robots | Clicks Start run and stops when Pause appears | The protocol is left running. Finish, pass, and fail are not watched |
 | Desktop protocol delete | Opens Delete and clicks Cancel | The protocol stays on the computer |
 | Update robot software | Checks that Browse file system is on screen | No file is chosen. No update runs |
 | Robot server reinstall | Checks that Reinstall or Up to date is on screen | Reinstall is not started |
 | Jupyter | Checks that Launch is on screen | The notebook is not opened |
-| About calibration, Networking | Screenshot of the tab | The contents are not judged pass or fail |
-| File capacity | Opens File manager, reads the storage meter, screenshots Robot Storage | Delete selected is not exercised |
+| About calibration, Networking | Opens the tab and checks the heading or active tab | The rest of the contents are not judged pass or fail |
+| File capacity | Opens File manager and reads the storage meter | Delete selected is not exercised |
 | Show in folder | Clicks the menu item | Finder is not checked |
 | Reanalyze | Clicks the menu item | Analysis is not waited on |
 | App language | The test exists and is always skipped | The helper is not built |
@@ -74,10 +74,10 @@ In words: open Devices, select the configured robot, and check whether the newer
 
 ```mermaid
 flowchart LR
-  open["Open Robot Settings once for the session"] --> about["About Calibration: screenshot only"]
+  open["Open Robot Settings once for the session"] --> about["About Calibration: heading is visible"]
   about --> pip["Pipette Calibrations: list each pipette status, including Not calibrated. A missing calibration does not fail"]
-  pip --> net["Networking: tab is selected, then screenshot"]
-  net --> cam["Camera: turn Camera Status on, toggle Live video and Error image capture, screenshot"]
+  pip --> net["Networking: tab is selected"]
+  net --> cam["Camera: turn Camera Status on, toggle Live video and Error image capture"]
   cam --> name["Robot name: rename to name plus TEST, then rename back. A leftover TEST name is restored first"]
   name --> ver["Robot server version: text must look like v1 or Unknown"]
   ver --> door["Pause when door opens: always skipped on Flex"]
@@ -96,7 +96,7 @@ In words: one Robot Settings session walks Calibration, Networking, and Camera, 
 
 ```mermaid
 flowchart LR
-  cap["Open File manager, read File capacity meter, screenshot Robot Storage"] --> rec["Open Protocol Run Records"]
+  cap["Open File manager and read the File capacity meter"] --> rec["Open Protocol Run Records"]
   rec --> rows{"Any protocol run records?"}
   rows -->|no| emptyRec["Pass with no records"]
   rows -->|yes| expand["Expand the first record and log its files"]
@@ -200,7 +200,7 @@ In words: General checks version, update status, the alert switch, and opens the
 ```mermaid
 flowchart LR
   list["Open Protocols and click the configured protocol"] --> url["Detail URL must load"]
-  url --> tabs["Click Parameters, Hardware, Labware, and Liquids when each tab exists, and screenshot"]
+  url --> tabs["Click Parameters, Hardware, Labware, and Liquids when each tab exists"]
   tabs --> re["Overflow, Reanalyze: click only"]
   re --> send["Overflow, Send to Opentrons Flex: slideout must appear, then Escape"]
   send --> folder["Overflow, Show in folder: click only"]
@@ -208,7 +208,7 @@ flowchart LR
   lab["Left nav, Labware"] --> scroll["Page loads, then scroll to the bottom"]
 ```
 
-In words: the configured protocol must open on its detail URL. Present detail tabs are clicked and screenshotted. Reanalyze and Show in folder are clicks only. Send to Flex must show its slideout, which is then closed. Delete is opened and cancelled. Labware opens from the left nav and scrolls to the bottom.
+In words: the configured protocol must open on its detail URL. Present detail tabs are clicked. Reanalyze and Show in folder are clicks only. Send to Flex must show its slideout, which is then closed. Delete is opened and cancelled. Labware opens from the left nav and scrolls to the bottom.
 
 ## Protocol run and Setup
 
@@ -225,13 +225,13 @@ flowchart LR
   upload --> runPage
   confirm --> runPage
   proceed --> runPage["Run page opens"]
-  runPage --> shot["Click each tab that exists: Setup, Parameters, Module Controls, Run Preview, Camera. Screenshot each"]
-  shot --> header["Read the status chip and the run timer. Any text is accepted"]
+  runPage --> tabs["Click each tab that exists: Setup, Parameters, Module Controls, Run Preview, Camera"]
+  tabs --> header["Read the status chip and the run timer. Any text is accepted"]
   header --> steps["For each of Instruments, Deck Hardware, Labware Offsets, Labware and Liquids, and Camera: expand the step and log its status chip"]
   steps --> stop["Stop. Setup is not completed and Start run is not clicked"]
 ```
 
-In words: Start setup, pick the robot, and confirm parameters when the protocol has them, including a CSV when one is configured. The run page tabs are screenshotted. Status and timer are read and any text is accepted. Each Setup step is expanded and its status is logged. The run is not started. If a run is already open, the Setup tests reuse it.
+In words: Start setup, pick the robot, and confirm parameters when the protocol has them, including a CSV when one is configured. The run page tabs are clicked. Status and timer are read and any text is accepted. Each Setup step is expanded and its status is logged. The run is not started. If a run is already open, the Setup tests reuse it.
 
 ## Calibration wizards
 

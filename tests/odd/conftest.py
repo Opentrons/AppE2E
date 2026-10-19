@@ -11,7 +11,6 @@ from playwright.sync_api import Browser, Page, Playwright
 from pytest_html import extras as html_extras
 
 import open_app
-from automation.app_helpers.artifacts import ODD_ARTIFACTS_DIR
 from automation.app_helpers.reporting import (
     finalize_workflow_video,
     path_relative_to_report,
@@ -22,7 +21,6 @@ from automation.app_helpers.reporting import (
     video_embed_html,
 )
 from automation.app_helpers.robot_connection import resolve_robot_ip
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_helpers.test_progress import log_path, log_step
 from run_config import is_headed_run
 
@@ -105,9 +103,3 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
         extras.append(html_extras.url(relative, name="Download video"))
     if extras:
         report.extras = getattr(report, "extras", []) + extras
-
-
-@pytest.fixture(scope="session")
-def screenshot_helper(run_odd_app: Page) -> ScreenshotHelper:
-    """Session-scoped helper for saving PNGs under ``artifacts/odd/<section>/``."""
-    return ScreenshotHelper(run_odd_app, output_dir=ODD_ARTIFACTS_DIR)

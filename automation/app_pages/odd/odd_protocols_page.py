@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import re
 
-from playwright.sync_api import Locator, Page, expect
+from playwright.sync_api import Locator, expect
 
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_pages.odd.odd_shell import OddShell
 
 
@@ -17,16 +16,6 @@ class OddProtocolsPage(OddShell):
     PROTOCOL_CARD_TEST_ID = "protocol_card"
     DETAIL_TABS = ("Summary", "Parameters", "Hardware", "Labware", "Liquids", "Deck")
     SORT_LABELS = ("Protocol Name", "Last Run", "Date Added")
-
-    def __init__(self, page: Page, shots: ScreenshotHelper | None = None) -> None:
-        """Bind the Playwright page and optional screenshot helper."""
-        super().__init__(page)
-        self.shots = shots
-
-    @staticmethod
-    def _slug(label: str) -> str:
-        """Turn a visible label into a filesystem-safe snapshot name."""
-        return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
 
     @property
     def nav_link(self) -> Locator:
@@ -76,13 +65,9 @@ class OddProtocolsPage(OddShell):
             expect(btn).to_be_visible()
             self.press(btn)
             expect(self.protocol_cards.first).to_be_visible(timeout=10_000)
-            if self.shots is not None:
-                self.shots.capture("protocol_sorting", f"{self._slug(label)}_asc")
             # Toggle a second time to exercise reverse sort direction.
             self.press(btn)
             expect(self.protocol_cards.first).to_be_visible(timeout=10_000)
-            if self.shots is not None:
-                self.shots.capture("protocol_sorting", f"{self._slug(label)}_desc")
 
     def _is_failed_analysis_card(self, card: Locator) -> bool:
         """Return True when the card shows a Failed analysis chip."""
@@ -132,8 +117,6 @@ class OddProtocolsPage(OddShell):
             expect(tab.first).to_be_visible()
             tab.first.click()
             expect(tab.first).to_be_visible()
-            if self.shots is not None:
-                self.shots.capture("protocol_details", self._slug(tab_name))
 
     def pin_protocol(self) -> bool:
         """Pin the open protocol from protocol details.

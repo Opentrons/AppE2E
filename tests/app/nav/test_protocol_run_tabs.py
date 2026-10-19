@@ -6,7 +6,6 @@ import pytest
 from playwright.sync_api import Page
 
 from automation.app_helpers.protocol_run_target import ProtocolRunTarget
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import (
     ChooseRobotToRunProtocolSlideout,
@@ -22,7 +21,7 @@ PROTOCOL_RUN_TABS = "tests/app/nav/test_protocol_run_tabs.py::test_protocol_run_
 @pytest.mark.workflow(
     group="protocol_run",
     section="Tabs",
-    label="Screenshot protocol run tabs",
+    label="Protocol run tabs",
     order=10,
     requires=HOME_GANTRY_REQUIRED,
     cases=(
@@ -30,13 +29,8 @@ PROTOCOL_RUN_TABS = "tests/app/nav/test_protocol_run_tabs.py::test_protocol_run_
         ("C44404", "Devices > Robot > Protocol Run > Module controls"),
     ),
 )
-def test_protocol_run_tabs(
-    run_local_app: Page,
-    protocol_name: str,
-    robot_name: str,
-    screenshot_helper: ScreenshotHelper,
-) -> None:
-    """Create a run, then click and screenshot each present run-page tab."""
+def test_protocol_run_tabs(run_local_app: Page, protocol_name: str, robot_name: str) -> None:
+    """Create a run, then click each present run-page tab."""
     page = run_local_app
     target = ProtocolRunTarget(protocol_name=protocol_name, robot_name=robot_name)
 
@@ -46,13 +40,13 @@ def test_protocol_run_tabs(
 
     log_step(f"Select robot '{robot_name}' and proceed to run")
     ChooseRobotToRunProtocolSlideout(page).start_run(target)
-    run_page = ProtocolRunPage(page, shots=screenshot_helper)
+    run_page = ProtocolRunPage(page)
     run_page.wait_until_open()
     log_done("Protocol run page opened")
 
-    log_step("Click and screenshot each run tab")
-    run_page.capture_all_tabs()
-    log_done("Protocol run tabs captured")
+    log_step("Click each run tab")
+    run_page.open_all_tabs()
+    log_done("Protocol run tabs opened")
 
 
 @pytest.mark.workflow(

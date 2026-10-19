@@ -173,7 +173,7 @@ make test-app-headed PYTEST_ARGS="-k test_advanced_update_robot_software"
 
 | Case | Command filter |
 | --- | --- |
-| File capacity snapshot | `-k test_file_capacity` |
+| File capacity | `-k test_file_capacity` |
 | Protocol run records | `-k test_protocol_run_records` |
 | Diagnostic files | `-k test_diagnostic_files` |
 | Download calibration logs | `-k test_download_calibration_logs` |
@@ -327,7 +327,7 @@ make test-app-nav-headed PYTEST_ARGS="-k test_protocol_source_download_preferenc
 | Flow | Filter |
 | --- | --- |
 | Open protocol from landing | `-k test_protocol_opens_from_landing` |
-| Protocol detail tabs (screenshots) | `-k test_protocol_detail_tabs` |
+| Protocol detail tabs | `-k test_protocol_detail_tabs` |
 | Reanalyze | `-k test_protocol_reanalyze` |
 | Send to Opentrons Flex | `-k test_protocol_send_to_flex` |
 | Show in folder | `-k test_protocol_show_in_folder` |

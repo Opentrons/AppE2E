@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
-from automation.app_helpers.screenshot_helper import ScreenshotHelper
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import ProtocolsPage
 
@@ -27,18 +26,14 @@ def test_protocol_opens_from_landing(run_local_app: Page, protocol_name: str) ->
 @pytest.mark.workflow(
     group="protocols",
     section="Protocol details",
-    label="Screenshot protocol detail tabs",
+    label="Protocol detail tabs",
     order=20,
 )
-def test_protocol_detail_tabs(
-    run_local_app: Page,
-    protocol_name: str,
-    screenshot_helper: ScreenshotHelper,
-) -> None:
-    """Open a protocol and click/screenshot each present detail tab."""
+def test_protocol_detail_tabs(run_local_app: Page, protocol_name: str) -> None:
+    """Open a protocol and click each present detail tab."""
     log_step(f"Open protocol '{protocol_name}'")
-    protocols = ProtocolsPage(run_local_app, shots=screenshot_helper)
+    protocols = ProtocolsPage(run_local_app)
     protocols.open(protocol_name)
-    log_step("Click and screenshot each detail tab")
-    protocols.capture_all_tabs()
-    log_done("Protocol detail tabs captured")
+    log_step("Click each detail tab")
+    protocols.validate_all_tabs()
+    log_done("Protocol detail tabs visible")

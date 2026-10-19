@@ -5,8 +5,10 @@ from automation.app_pages.base_app import (
     TEMPERATURE,
     THERMOCYCLER,
     AppBasePage,
+    AppDocumentationRequired,
     AppSettingsPage,
     ChooseRobotToRunProtocolSlideout,
+    ComplianceLoginPage,
     DeckConfigurationPage,
     DeviceCardsPage,
     DevicesPage,
@@ -43,8 +45,10 @@ from automation.app_pages.odd import (
 
 __all__ = [
     "AppBasePage",
+    "AppDocumentationRequired",
     "AppSettingsPage",
     "ChooseRobotToRunProtocolSlideout",
+    "ComplianceLoginPage",
     "DeckConfigurationPage",
     "DeviceCardsPage",
     "DevicesPage",
