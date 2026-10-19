@@ -49,9 +49,7 @@ def ensure_ffmpeg() -> str:
         _install_ffmpeg()
         found = tool_executable("ffmpeg")
     if found is None:
-        raise SystemExit(
-            "ffmpeg is required for test video encoding. Install it, then restart the runner."
-        )
+        raise SystemExit("ffmpeg is required for test video encoding. Install it, then restart the runner.")
     tool_executable("ffprobe")
     print(f"ffmpeg: {found}", flush=True)
     return found

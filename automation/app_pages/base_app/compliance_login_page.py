@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 
 
@@ -28,12 +29,12 @@ class ComplianceLoginPage(AppBasePage):
     @property
     def log_in_button(self) -> Locator:
         """Robot-detail button that opens the login modal."""
-        return self.page.get_by_role("button", name="Log in", exact=True)
+        return self.page.get_by_role("button", name=exact_text("Log in"))
 
     @property
     def login_title(self) -> Locator:
         """Heading of the Compliance Ready login modal."""
-        return self.page.get_by_text(self.LOGIN_TITLE, exact=True)
+        return self.page.get_by_text(exact_text(self.LOGIN_TITLE))
 
     @property
     def username_input(self) -> Locator:
@@ -53,7 +54,7 @@ class ComplianceLoginPage(AppBasePage):
     @property
     def account_button(self) -> Locator:
         """Signed-in account button, labeled with the username initial."""
-        return self.page.get_by_role("button", name=self.account_initial, exact=True)
+        return self.page.get_by_role("button", name=exact_text(self.account_initial))
 
     def access_control_is_on(self) -> bool:
         """True when this robot shows a Log in button or a signed-in account."""

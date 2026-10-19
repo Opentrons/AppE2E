@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_shell import OddShell
 
 
@@ -51,12 +52,12 @@ class OddKebabMenu(OddShell):
 
     def cancel_restart(self) -> None:
         """Leave the restart confirmation without restarting."""
-        self.page.get_by_role("button", name="Go back", exact=True).click()
+        self.page.get_by_role("button", name=exact_text("Go back")).click()
         expect(self.page.get_by_test_id("restart_robot_confirmation_description")).to_be_hidden(timeout=10_000)
 
     def confirm_restart(self) -> None:
         """Confirm restart. The robot drops offline until it boots again."""
-        self.page.get_by_role("button", name="Restart", exact=True).click()
+        self.page.get_by_role("button", name=exact_text("Restart")).click()
 
     def open_shutdown(self) -> None:
         """Open the Turn off robot confirmation. Does not shut the robot down."""
@@ -66,19 +67,19 @@ class OddKebabMenu(OddShell):
 
     def cancel_shutdown(self) -> None:
         """Leave the shutdown confirmation without powering off."""
-        self.page.get_by_role("button", name="Go back", exact=True).click()
-        expect(self.page.get_by_role("button", name="Shutdown", exact=True)).to_be_hidden(timeout=10_000)
+        self.page.get_by_role("button", name=exact_text("Go back")).click()
+        expect(self.page.get_by_role("button", name=exact_text("Shutdown"))).to_be_hidden(timeout=10_000)
 
     def confirm_shutdown(self) -> None:
         """Confirm shutdown. The robot powers off and stays off until someone turns it on."""
-        self.page.get_by_role("button", name="Shutdown", exact=True).click()
+        self.page.get_by_role("button", name=exact_text("Shutdown")).click()
 
     def open_deck_configuration(self) -> None:
         """Open Deck configuration from the overflow menu."""
         self.open()
         self._item("Deck configuration").click()
         expect(self.page).to_have_url(self.DECK_CONFIGURATION_URL, timeout=15_000)
-        expect(self.page.get_by_text("Deck configuration", exact=True)).to_be_visible(timeout=15_000)
+        expect(self.page.get_by_text(exact_text("Deck configuration"))).to_be_visible(timeout=15_000)
 
     def toggle_lights(self) -> str:
         """Click Lights on / Lights off and return the label now shown.

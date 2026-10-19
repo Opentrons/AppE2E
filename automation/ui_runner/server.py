@@ -84,11 +84,7 @@ def resolve_run_defaults() -> dict[str, str]:
         or file_values.get("PROTOCOL_NAME", "").strip()
         or DEFAULT_PROTOCOL_NAME
     )
-    robot_ip = (
-        os.environ.get("ROBOT_IP", "").strip()
-        or file_values.get("ROBOT_IP", "").strip()
-        or DEFAULT_ROBOT_IP
-    )
+    robot_ip = os.environ.get("ROBOT_IP", "").strip() or file_values.get("ROBOT_IP", "").strip() or DEFAULT_ROBOT_IP
     return {"robot_name": robot_name, "protocol_name": protocol_name, "robot_ip": robot_ip}
 
 

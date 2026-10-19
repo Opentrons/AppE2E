@@ -9,7 +9,7 @@ from playwright.sync_api import Locator, Page, expect
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
 from automation.app_helpers.left_nav import link, navigate_to
 from automation.app_helpers.list_scroll import scroll_until_visible
-from automation.app_helpers.locator_helpers import first_resolved
+from automation.app_helpers.locator_helpers import exact_text, first_resolved
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import OverflowMenu
 
@@ -64,7 +64,7 @@ class DevicesPage(AppBasePage):
 
     def device_details_tab(self, name: str) -> Locator:
         """RoundTab / RoundNavLink for a Device Details section by visible name."""
-        return self.page.get_by_role("link", name=name, exact=True)
+        return self.page.get_by_role("link", name=exact_text(name))
 
     def expect_device_details_tabs_visible(self) -> None:
         """Assert Hardware / Deck Configuration / Run History tabs are visible."""
@@ -91,12 +91,12 @@ class DevicesPage(AppBasePage):
             )
 
         def _by_robot_name_in_card() -> Locator:
-            return self.page.get_by_text(self.robot_name, exact=True).locator(
+            return self.page.get_by_text(exact_text(self.robot_name)).locator(
                 f"xpath=ancestor::*[.//*[@data-testid={overflow_test_id!r}]][1]"
             )
 
         def _by_robot_name() -> Locator:
-            return self.page.get_by_text(self.robot_name, exact=True)
+            return self.page.get_by_text(exact_text(self.robot_name))
 
         def _by_detail_link() -> Locator:
             return self.page.locator(f'a[href="#/devices/{escaped_name}"], a[href="/devices/{escaped_name}"]').filter(

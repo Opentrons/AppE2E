@@ -11,7 +11,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import click_visible_overlays, close_visible_slideouts
-from automation.app_helpers.locator_helpers import menu_item
+from automation.app_helpers.locator_helpers import exact_text, menu_item
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import OverflowMenu, Slideout
 
@@ -133,7 +133,7 @@ class ThermocyclerCard(ModuleCard):
         if not self.page_object._open_module_overflow(self.serial_prefix):
             return
         close_lid = self.page_object._module_menu(self.serial_prefix).get_by_role(
-            "button", name="Close lid", exact=True
+            "button", name=exact_text("Close lid")
         )
         if close_lid.count() > 0 and close_lid.is_visible():
             close_lid.click()
@@ -422,7 +422,7 @@ class DeviceCardsPage(AppBasePage):
         card = self._instrument_card(label)
         if card.count() == 0:
             return False
-        if card.get_by_text(re.compile(r"^Empty$", re.I)).count() > 0:
+        if card.get_by_text(exact_text("Empty")).count() > 0:
             return False
         overflow = self._instrument_overflow_button(label)
         return overflow.count() > 0 and not overflow.is_disabled()
@@ -509,7 +509,7 @@ class DeviceCardsPage(AppBasePage):
         """Return the About module button in a module overflow menu."""
         card = self._module_card(serial_prefix).first
         return card.get_by_test_id(re.compile(r"^about_module_")).or_(
-            card.get_by_role("button", name="About module", exact=True)
+            card.get_by_role("button", name=exact_text("About module"))
         )
 
     def _click_about_module(self, serial_prefix: str, module_model: str) -> None:
@@ -519,7 +519,7 @@ class DeviceCardsPage(AppBasePage):
         if about_test_id.count() > 0:
             about_test_id.click()
         else:
-            card.get_by_role("button", name="About module", exact=True).click()
+            card.get_by_role("button", name=exact_text("About module")).click()
 
     def _click_module_menu_item(
         self, serial_prefix: str, *, test_id: str | None = None, name: str | None = None
@@ -529,7 +529,7 @@ class DeviceCardsPage(AppBasePage):
         if test_id is not None:
             menu.get_by_test_id(test_id).click()
         elif name is not None:
-            menu.get_by_role("button", name=name, exact=True).click()
+            menu.get_by_role("button", name=exact_text(name)).click()
         else:
             raise ValueError("Provide test_id or name for module menu item.")
 
@@ -639,7 +639,7 @@ class DeviceCardsPage(AppBasePage):
         if re.search(r"closed", status.inner_text(), re.IGNORECASE):
             return
 
-        close_btn = self.page.get_by_role("button", name="Close latch", exact=True)
+        close_btn = self.page.get_by_role("button", name=exact_text("Close latch"))
         expect(close_btn).to_be_visible(timeout=5_000)
         close_btn.click()
         expect(status).to_have_text(re.compile(r"closed", re.IGNORECASE), timeout=20_000)
@@ -823,7 +823,7 @@ class DeviceCardsPage(AppBasePage):
         if card.count() == 0:
             print(f"  Skipping instrument card '{label}' — not found.")
             return False
-        if card.get_by_text(re.compile(r"^Empty$", re.I)).count() > 0:
+        if card.get_by_text(exact_text("Empty")).count() > 0:
             print(f"  Skipping instrument card '{label}' — mount is empty.")
             return False
         overflow = self._instrument_overflow_button(label)
@@ -849,7 +849,7 @@ class DeviceCardsPage(AppBasePage):
         if not self._open_instrument_overflow(label):
             return
 
-        about = self.page.get_by_role("button", name="About pipette", exact=True)
+        about = self.page.get_by_role("button", name=exact_text("About pipette"))
         if about.count() == 0:
             print(f"  Skipping '{label}' — About pipette not in menu (empty mount).")
             self._dismiss_blocking_overlays()
@@ -858,7 +858,7 @@ class DeviceCardsPage(AppBasePage):
         serial = self.page.get_by_test_id(ABOUT_PIPETTE_SERIAL).first.inner_text().strip()
 
         firmware = None
-        version_heading = self.page.get_by_text(re.compile(r"^current version$", re.I))
+        version_heading = self.page.get_by_text(exact_text("current version"))
         if version_heading.count() > 0:
             firmware = version_heading.first.locator("xpath=following-sibling::p[1]").inner_text().strip()
 
@@ -876,14 +876,14 @@ class DeviceCardsPage(AppBasePage):
         if not self._open_instrument_overflow(label):
             return
 
-        self.page.get_by_role("button", name="About gripper", exact=True).click()
+        self.page.get_by_role("button", name=exact_text("About gripper")).click()
 
-        serial_heading = self.page.get_by_text(re.compile(r"^serial number$", re.I))
+        serial_heading = self.page.get_by_text(exact_text("serial number"))
         expect(serial_heading).to_be_visible()
         serial = serial_heading.locator("xpath=following-sibling::p[1]").inner_text().strip()
 
         firmware = None
-        version_heading = self.page.get_by_text(re.compile(r"^current version$", re.I))
+        version_heading = self.page.get_by_text(exact_text("current version"))
         if version_heading.count() > 0:
             firmware = version_heading.first.locator("xpath=following-sibling::p[1]").inner_text().strip()
 

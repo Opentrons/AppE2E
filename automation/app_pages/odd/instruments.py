@@ -7,6 +7,7 @@ from typing import Literal
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_drop_tip_wizard import OddDropTipWizard
 from automation.app_pages.odd.odd_shell import OddShell
 
@@ -136,7 +137,7 @@ class OddInstrumentsPage(OddShell):
         self.open_mount_overflow()
         self.press(self.page.get_by_role("button", name="Drop tips"))
         prompt = self.page.get_by_text("Before you begin, do you need to preserve aspirated liquid?")
-        heading = self.page.get_by_text("Documentation required", exact=True)
+        heading = self.page.get_by_text(exact_text("Documentation required"))
         expect(heading.or_(prompt).first).to_be_visible(timeout=20_000)
         OddDropTipWizard(self.page).confirm_audit_note_if_needed()
         expect(prompt).to_be_visible(timeout=30_000)
@@ -161,7 +162,7 @@ class OddInstrumentsPage(OddShell):
         """Open Drop tips, or continue one that is already on screen."""
         wizard = OddDropTipWizard(self.page)
         prompt = self.page.get_by_text("Before you begin, do you need to preserve aspirated liquid?")
-        heading = self.page.get_by_text("Documentation required", exact=True)
+        heading = self.page.get_by_text(exact_text("Documentation required"))
         getting_ready = self.page.get_by_text(re.compile(r"^Getting ready"))
         already_open = prompt.or_(heading).or_(getting_ready)
         if already_open.count() > 0 and already_open.first.is_visible():
@@ -199,7 +200,7 @@ class OddInstrumentsPage(OddShell):
             complete_calibration.click()
         expect(self.page.get_by_text("successfully calibrated")).to_be_visible(timeout=15_000)
         # Header Exit is aria-label="Exit". The blue results button is the other Exit.
-        exit_button = self.page.locator("button:not([aria-label='Exit'])").get_by_text("Exit", exact=True)
+        exit_button = self.page.locator("button:not([aria-label='Exit'])").get_by_text(exact_text("Exit"))
         expect(exit_button).to_be_visible(timeout=15_000)
         exit_button.click()
         expect(self.info_item("last calibrated")).to_be_visible(timeout=15_000)

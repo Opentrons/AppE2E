@@ -13,6 +13,7 @@ from contextlib import contextmanager
 
 from playwright.sync_api import Locator, Page, sync_playwright
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_helpers.screencast_recorder import CDP_HTTP_ATTR
 from open_app import ODD_CDP_PORT
 
@@ -66,7 +67,7 @@ def protocol_row(
     timeout: float = _DEFAULT_TIMEOUT_MS,
 ) -> Locator:
     """Return the protocols-list row whose name and Date Added both match."""
-    cells = page.get_by_text(name, exact=True)
+    cells = page.get_by_text(exact_text(name))
     cells.first.wait_for(state="visible", timeout=timeout)
     for i in range(cells.count()):
         row = cells.nth(i).locator("xpath=ancestor::div[2]")
@@ -77,7 +78,7 @@ def protocol_row(
 
 def errored(page: Page) -> bool:
     """Return whether the ODD is showing Launch recovery mode."""
-    return page.get_by_text("Launch recovery mode", exact=True).is_visible()
+    return page.get_by_text(exact_text("Launch recovery mode")).is_visible()
 
 
 def wait_for_run_outcome(page: Page, timeout: float = 0) -> str:
@@ -89,13 +90,13 @@ def wait_for_run_outcome(page: Page, timeout: float = 0) -> str:
     ``"error"``.
     """
     summary = page.get_by_text(re.compile(r"^Run (completed|failed|canceled)")).first
-    recovery = page.get_by_text("Launch recovery mode", exact=True)
+    recovery = page.get_by_text(exact_text("Launch recovery mode"))
     summary.or_(recovery).first.wait_for(state="visible", timeout=timeout)
     if errored(page):
         return "error"
     header = (summary.inner_text() or "").strip()
     page.mouse.click(40, 41)
-    page.get_by_text("Return to dashboard", exact=True).wait_for(state="visible", timeout=_DEFAULT_TIMEOUT_MS)
+    page.get_by_text(exact_text("Return to dashboard")).wait_for(state="visible", timeout=_DEFAULT_TIMEOUT_MS)
     return "completed" if header.startswith("Run completed") else "error"
 
 
@@ -108,4 +109,4 @@ def reset(page: Page) -> None:
     page.wait_for_function("() => window.location.hash.startsWith('#/dashboard')", timeout=_DEFAULT_TIMEOUT_MS)
     goto_route(page, "#/protocols")
     # The list renders an empty state until useAllProtocolsQuery resolves.
-    page.get_by_text("Date Added", exact=True).wait_for(state="visible", timeout=_DEFAULT_TIMEOUT_MS)
+    page.get_by_text(exact_text("Date Added")).wait_for(state="visible", timeout=_DEFAULT_TIMEOUT_MS)

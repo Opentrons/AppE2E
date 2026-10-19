@@ -8,6 +8,7 @@ from pathlib import Path
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.list_scroll import scroll_until_visible
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_helpers.protocol_run_target import ProtocolRunTarget
 from automation.app_pages.base_app.app_base_page import AppBasePage
 
@@ -31,7 +32,7 @@ class ChooseRobotToRunProtocolSlideout(AppBasePage):
 
     def robot_option(self, robot_name: str) -> Locator:
         """Locator for a robot option labeled with ``robot_name``."""
-        return self.page.get_by_text(robot_name, exact=True).first
+        return self.page.get_by_text(exact_text(robot_name)).first
 
     def select_robot(self, robot_name: str) -> None:
         """Scroll to and select the robot in the slideout list."""

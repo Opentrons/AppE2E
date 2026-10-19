@@ -102,9 +102,7 @@ class RobotConnection:
         if self.ip:
             return self.ip
         # Prefer an explicit env/CLI IP over the lab default when we started on USB.
-        for candidate in (
-            os.environ.get("ROBOT_IP", "").strip(),
-        ):
+        for candidate in (os.environ.get("ROBOT_IP", "").strip(),):
             if candidate:
                 return candidate
         return None

@@ -20,9 +20,7 @@ C44406	TC Calibration
 C44404	Devices > Robot > Protocol Run > Module controls
 """
 
-DECK_CONFIG_FOR_MODULES = (
-    "tests/app/calibration/test_calibration.py::test_deck_configuration_before_modules"
-)
+DECK_CONFIG_FOR_MODULES = "tests/app/calibration/test_calibration.py::test_deck_configuration_before_modules"
 
 
 @pytest.mark.workflow(group="calibration", section="Status", label="Review calibration status", order=10)

@@ -9,6 +9,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, expect
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_shell import OddShell
 
 # The touchscreen can drop off the network for at least five minutes while Wi-Fi comes up.
@@ -37,8 +38,8 @@ class OddUnboxingPage(OddShell):
 
     def wait_for_setup_screen(self) -> None:
         """Wait out the boot spinner until language or welcome is showing."""
-        language = self.page.get_by_text("Choose your language", exact=True)
-        welcome = self.page.get_by_text("Welcome to your Opentrons Flex!", exact=True)
+        language = self.page.get_by_text(exact_text("Choose your language"))
+        welcome = self.page.get_by_text(exact_text("Welcome to your Opentrons Flex!"))
         expect(language.or_(welcome).first).to_be_visible(timeout=120_000)
 
     def dismiss_blocking_toasts(self) -> None:
@@ -48,18 +49,18 @@ class OddUnboxingPage(OddShell):
         server-version update toast when that toast offers Close.
         """
         for _ in range(3):
-            close = self.page.locator('[data-testid^="Toast_"]').get_by_role("button", name="Close", exact=True)
+            close = self.page.locator('[data-testid^="Toast_"]').get_by_role("button", name=exact_text("Close"))
             if close.count() == 0 or not close.first.is_visible():
                 return
             self.press(close.first)
             expect(close.first).to_be_hidden(timeout=10_000)
 
     def _showing_language(self) -> bool:
-        heading = self.page.get_by_text("Choose your language", exact=True)
+        heading = self.page.get_by_text(exact_text("Choose your language"))
         return heading.count() > 0 and heading.is_visible()
 
     def _showing_welcome(self) -> bool:
-        heading = self.page.get_by_text("Welcome to your Opentrons Flex!", exact=True)
+        heading = self.page.get_by_text(exact_text("Welcome to your Opentrons Flex!"))
         return heading.count() > 0 and heading.is_visible()
 
     def select_english_us(self) -> None:
@@ -71,13 +72,13 @@ class OddUnboxingPage(OddShell):
 
     def continue_from_language(self) -> None:
         """Leave Choose Language. The next screen is Welcome."""
-        self.press(self.page.get_by_role("button", name="Continue", exact=True))
-        expect(self.page.get_by_text("Welcome to your Opentrons Flex!", exact=True)).to_be_visible(timeout=15_000)
+        self.press(self.page.get_by_role("button", name=exact_text("Continue")))
+        expect(self.page.get_by_text(exact_text("Welcome to your Opentrons Flex!"))).to_be_visible(timeout=15_000)
 
     def get_started(self) -> None:
         """Click through Welcome. The next screen asks for a network type."""
-        self.press(self.page.get_by_role("button", name="Get started", exact=True))
-        expect(self.page.get_by_text("Choose network type", exact=True)).to_be_visible(timeout=15_000)
+        self.press(self.page.get_by_role("button", name=exact_text("Get started")))
+        expect(self.page.get_by_text(exact_text("Choose network type"))).to_be_visible(timeout=15_000)
 
     def pass_opening_screens(self) -> None:
         """Welcome and English (US), in whichever order the touchscreen shows them.
@@ -102,19 +103,19 @@ class OddUnboxingPage(OddShell):
         wifi = self.page.get_by_role("button", name=re.compile(r"Wi-Fi"))
         expect(wifi.first).to_be_visible(timeout=15_000)
         self.press(wifi.first)
-        expect(self.page.get_by_text("Select a network", exact=True)).to_be_visible(timeout=15_000)
+        expect(self.page.get_by_text(exact_text("Select a network"))).to_be_visible(timeout=15_000)
 
     def select_network(self, ssid: str) -> None:
         """Wait until ``ssid`` is in the scanned list and select it."""
-        row = self.page.get_by_role("button", name=ssid, exact=True)
+        row = self.page.get_by_role("button", name=exact_text(ssid))
         expect(row).to_be_visible(timeout=90_000)
         self.press(row)
-        expect(self.page.get_by_text("Select a security type", exact=True)).to_be_visible(timeout=15_000)
+        expect(self.page.get_by_text(exact_text("Select a security type"))).to_be_visible(timeout=15_000)
 
     def continue_from_security(self) -> None:
         """Leave the security screen. WPA2 Personal is already selected."""
-        self.press(self.page.get_by_role("button", name="Continue", exact=True))
-        expect(self.page.get_by_text("Sign into Wi-Fi", exact=True)).to_be_visible(timeout=15_000)
+        self.press(self.page.get_by_role("button", name=exact_text("Continue")))
+        expect(self.page.get_by_text(exact_text("Sign into Wi-Fi"))).to_be_visible(timeout=15_000)
 
     def enter_password_and_connect(self, password: str) -> None:
         """Fill the password field and press Connect.
@@ -125,11 +126,11 @@ class OddUnboxingPage(OddShell):
         expect(field).to_be_visible(timeout=15_000)
         field.fill(password)
         expect(field).to_have_value(password)
-        self.press(self.page.get_by_role("button", name="Connect", exact=True))
+        self.press(self.page.get_by_role("button", name=exact_text("Connect")))
 
     def expect_connecting(self, ssid: str) -> None:
         """Assert the touchscreen is connecting to ``ssid``."""
-        expect(self.page.get_by_text(f"Connecting to {ssid}...", exact=True)).to_be_visible(timeout=30_000)
+        expect(self.page.get_by_text(exact_text(f"Connecting to {ssid}..."))).to_be_visible(timeout=30_000)
 
     def _fail_if_wifi_error(self) -> None:
         failed = self.page.get_by_text(_WIFI_FAILED)
@@ -165,7 +166,7 @@ class OddUnboxingPage(OddShell):
             remaining_ms = int((deadline - time.monotonic()) * 1000)
             try:
                 self._fail_if_wifi_error()
-                button = self.page.get_by_role("button", name="Continue", exact=True)
+                button = self.page.get_by_role("button", name=exact_text("Continue"))
                 expect(button).to_be_visible(timeout=min(15_000, remaining_ms))
                 self.dismiss_blocking_toasts()
                 self.press(button)

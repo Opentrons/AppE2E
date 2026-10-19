@@ -8,7 +8,7 @@ from re import Pattern
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import click_when_ui_ready, dismiss_blocking_ui
-from automation.app_helpers.locator_helpers import sidebar_nav_link
+from automation.app_helpers.locator_helpers import exact_text, sidebar_nav_link
 
 _NAV_TARGETS: dict[str, str] = {
     "Devices": "devices",
@@ -21,7 +21,7 @@ def link(page: Page, name: str, *, first: bool = False) -> Locator:
     """Return the left-nav link for ``name`` (Devices, Labware, Protocols)."""
     href_fragment = _NAV_TARGETS.get(name)
     if href_fragment is None:
-        locator = page.get_by_role("link", name=name, exact=True).filter(has_not=page.locator('[class*="crumb_link"]'))
+        locator = page.get_by_role("link", name=exact_text(name)).filter(has_not=page.locator('[class*="crumb_link"]'))
         return locator.first if first else locator
     return sidebar_nav_link(page, href_fragment=href_fragment, label=name)
 

@@ -8,6 +8,8 @@ from typing import Literal
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
+
 CheckboxState = Literal["checked", "unchecked", "mixed"]
 
 
@@ -33,7 +35,7 @@ class OverflowMenu:
             except AssertionError:
                 pass
         for name in names:
-            candidate = self.menu.get_by_role("button", name=name, exact=True).first
+            candidate = self.menu.get_by_role("button", name=exact_text(name)).first
             try:
                 expect(candidate).to_be_visible(timeout=2_000)
                 return candidate
@@ -42,7 +44,7 @@ class OverflowMenu:
         raise LookupError(f"Overflow item not found: {names or (test_id,)}")
 
     def has_item(self, name: str) -> bool:
-        candidate = self.menu.get_by_role("button", name=name, exact=True)
+        candidate = self.menu.get_by_role("button", name=exact_text(name))
         return candidate.count() > 0 and candidate.first.is_visible()
 
     def click_item(self, *names: str, test_id: str | re.Pattern[str] | None = None) -> None:
@@ -123,7 +125,7 @@ class RoundTabBar:
         self.base_url = base_url.rstrip("/")
 
     def tab(self, label: str, slug: str) -> Locator:
-        return self.page.locator(f'a[href*="{self.base_url}/{slug}"]').get_by_text(label, exact=True)
+        return self.page.locator(f'a[href*="{self.base_url}/{slug}"]').get_by_text(exact_text(label))
 
     def open(self, label: str, slug: str) -> None:
         tab = self.tab(label, slug)

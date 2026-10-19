@@ -10,6 +10,7 @@ from playwright.sync_api import Locator, expect
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
 from automation.app_helpers.left_nav import link, navigate_to
 from automation.app_helpers.list_scroll import scroll_until_visible
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.protocol_overflow_menu import ProtocolOverflowMenu
 
@@ -65,7 +66,7 @@ class ProtocolsPage(AppBasePage):
     def has_protocol(self, protocol_name: str) -> bool:
         """Return whether an exact protocol title is present on the landing page."""
         self.navigate_landing()
-        title = self.page.get_by_text(protocol_name, exact=True)
+        title = self.page.get_by_text(exact_text(protocol_name))
         return title.count() > 0
 
     def import_protocol(self, protocol_name: str, protocol_path: Path) -> None:
@@ -75,11 +76,11 @@ class ProtocolsPage(AppBasePage):
             raise FileNotFoundError(f"Protocol file not found: {path}")
 
         self.navigate_landing()
-        self.page.get_by_role("button", name="Import", exact=True).click()
+        self.page.get_by_role("button", name=exact_text("Import")).click()
         file_input = self.page.get_by_test_id("file_input")
         expect(file_input).to_be_attached()
         file_input.set_input_files(str(path.resolve()))
-        expect(self.page.get_by_text(protocol_name, exact=True).first).to_be_visible(timeout=120_000)
+        expect(self.page.get_by_text(exact_text(protocol_name)).first).to_be_visible(timeout=120_000)
 
     def ensure_protocol_imported(self, protocol_name: str, protocol_path: Path) -> bool:
         """Import the protocol only when its exact display title is absent."""
@@ -92,14 +93,12 @@ class ProtocolsPage(AppBasePage):
         """Send a protocol from its overflow menu to the named Flex."""
         self.page.evaluate("() => window.resizeTo(1680, 1100)")
         self.choose_overflow_action(protocol_name, "send_to_flex")
-        send = self.page.get_by_role("button", name="Send", exact=True)
+        send = self.page.get_by_role("button", name=exact_text("Send"))
         expect(send).to_be_visible(timeout=15_000)
         # A collapsed robot slideout stays mounted off-screen and also contains the
         # robot name. Stay inside the open Send slideout.
-        slideout = send.locator(
-            "xpath=ancestor::*[.//h2[normalize-space()='Send protocol to Opentrons Flex']][1]"
-        )
-        robot = slideout.get_by_text(robot_name, exact=True).first
+        slideout = send.locator("xpath=ancestor::*[.//h2[normalize-space()='Send protocol to Opentrons Flex']][1]")
+        robot = slideout.get_by_text(exact_text(robot_name)).first
         expect(robot).to_be_visible(timeout=30_000)
         card = robot.locator("xpath=ancestor::div[3]")
         card.evaluate("element => element.scrollIntoView({block: 'center', inline: 'nearest'})")
@@ -152,7 +151,7 @@ class ProtocolsPage(AppBasePage):
 
     def tab_button(self, name: str) -> Locator:
         """Return the detail-tab button locator for ``name``."""
-        return self.page.get_by_role("button", name=name, exact=True)
+        return self.page.get_by_role("button", name=exact_text(name))
 
     def tab(self, name: str) -> None:
         """Click a protocol detail tab by visible name."""

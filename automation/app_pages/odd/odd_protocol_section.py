@@ -6,6 +6,7 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_shell import OddShell
 
 
@@ -45,7 +46,7 @@ class ProtocolSection(OddShell):
         self.press(target.first)
         self.page.wait_for_url(self.PROTOCOL_DETAIL_URL, timeout=15_000)
         self.expect_start_setup()
-        expect(self.page.get_by_text(protocol_name, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(protocol_name))).to_be_visible()
 
     def expect_start_setup(self) -> None:
         """Assert Start setup is available on the open protocol."""
@@ -70,7 +71,7 @@ class ProtocolSection(OddShell):
         if unpin.count() > 0 and unpin.is_visible():
             self.unpin_protocol()
         self.press(pin)
-        max_pins = self.page.get_by_text("You've hit your max!", exact=True)
+        max_pins = self.page.get_by_text(exact_text("You've hit your max!"))
         if max_pins.count() > 0 and max_pins.is_visible():
             self.press(self.page.get_by_role("button", name="Close"))
             raise AssertionError("Pin blocked: the maximum number of pinned protocols is already reached")
@@ -89,18 +90,18 @@ class ProtocolSection(OddShell):
     def delete_protocol(self) -> None:
         """Delete the open protocol and return to the Protocols list."""
         self.open_delete_confirmation()
-        self.press(self.page.get_by_role("button", name="Delete", exact=True))
+        self.press(self.page.get_by_role("button", name=exact_text("Delete")))
         expect(self.page).to_have_url(self.PROTOCOLS_URL, timeout=60_000)
         expect(self._delete_dialog()).to_be_hidden(timeout=10_000)
 
     def _pin_button(self) -> Locator:
-        return self.page.get_by_role("button", name="Pin protocol", exact=True)
+        return self.page.get_by_role("button", name=exact_text("Pin protocol"))
 
     def _unpin_button(self) -> Locator:
-        return self.page.get_by_role("button", name="Unpin protocol", exact=True)
+        return self.page.get_by_role("button", name=exact_text("Unpin protocol"))
 
     def _delete_dialog(self) -> Locator:
-        return self.page.get_by_text("Delete this protocol?", exact=True)
+        return self.page.get_by_text(exact_text("Delete this protocol?"))
 
 
 class OddProtocolOptions(OddShell):
@@ -116,40 +117,40 @@ class OddProtocolOptions(OddShell):
 
     def summary(self) -> None:
         """Open the Summary tab."""
-        self.press(self.page.get_by_role("button", name="Summary", exact=True))
+        self.press(self.page.get_by_role("button", name=exact_text("Summary")))
         expect(self.page.get_by_text("Date Added")).to_be_visible(timeout=10_000)
 
     def parameters(self) -> None:
         """Open the Parameters tab."""
-        self.press(self.page.get_by_role("button", name="Parameters", exact=True))
+        self.press(self.page.get_by_role("button", name=exact_text("Parameters")))
         empty = self.page.get_by_text("No parameters specified in this protocol")
         table = self.page.get_by_test_id("Parameters_table")
         expect(empty.or_(table)).to_be_visible(timeout=10_000)
 
     def Hardware(self) -> None:
         """Open the Hardware tab."""
-        self.press(self.page.get_by_role("button", name="Hardware", exact=True))
-        located = self.page.get_by_text("Location", exact=True)
+        self.press(self.page.get_by_role("button", name=exact_text("Hardware")))
+        located = self.page.get_by_text(exact_text("Location"))
         empty = self.page.get_by_text("No hardware is specified for this protocol")
         expect(located.or_(empty)).to_be_visible(timeout=10_000)
 
     def expect_smoke_parameters(self) -> None:
         """Open Parameters and require the Flex Smoke Test runtime parameters."""
         self.parameters()
-        expect(self.page.get_by_text("Number of Stackers", exact=True)).to_be_visible(timeout=10_000)
+        expect(self.page.get_by_text(exact_text("Number of Stackers"))).to_be_visible(timeout=10_000)
 
     def deck(self) -> None:
         """Open the Deck tab and require the protocol deck map."""
-        self.press(self.page.get_by_role("button", name="Deck", exact=True))
+        self.press(self.page.get_by_role("button", name=exact_text("Deck")))
         expect(self.page.get_by_label("protocol deck map")).to_be_visible(timeout=15_000)
 
     def liquids(self) -> None:
         """Open the Liquids tab and require the smoke-test water liquid."""
-        self.press(self.page.get_by_role("button", name="Liquids", exact=True))
-        expect(self.page.get_by_text("Water", exact=True)).to_be_visible(timeout=15_000)
+        self.press(self.page.get_by_role("button", name=exact_text("Liquids")))
+        expect(self.page.get_by_text(exact_text("Water"))).to_be_visible(timeout=15_000)
 
     def cancel(self) -> None:
         """Dismiss the delete confirmation and stay on the open protocol."""
-        self.press(self.page.get_by_role("button", name="Cancel", exact=True))
-        expect(self.page.get_by_text("Delete this protocol?", exact=True)).to_be_hidden(timeout=10_000)
+        self.press(self.page.get_by_role("button", name=exact_text("Cancel")))
+        expect(self.page.get_by_text(exact_text("Delete this protocol?"))).to_be_hidden(timeout=10_000)
         expect(self.page.get_by_role("button", name="Start setup")).to_be_visible(timeout=10_000)

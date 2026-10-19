@@ -1,9 +1,8 @@
 from opentrons import protocol_api
-requirements = {
-    "apiLevel": "2.28",
-    "robotType": "Flex"
-}
-metadata = { "protocolName": "Protocol 1: Temperature Module Disconnect Recovery Test"}
+
+requirements = {"apiLevel": "2.28", "robotType": "Flex"}
+metadata = {"protocolName": "Protocol 1: Temperature Module Disconnect Recovery Test"}
+
 
 def run(protocol: protocol_api.ProtocolContext) -> None:
     temp_module = protocol.load_module("temperature module gen2", "D1")

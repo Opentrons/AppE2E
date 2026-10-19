@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import StatusChip, ToggleSwitch
 
@@ -22,7 +23,7 @@ class RunSetupPage(AppBasePage):
         # Titles like "Camera" also appear on RoundTabs — only keep matches that
         # sit inside a SetupStep accordion (expanded or collapsed content).
         return (
-            self.page.get_by_text(title, exact=True)
+            self.page.get_by_text(exact_text(title))
             .locator(
                 "xpath=ancestor::*[.//*[@data-testid='SetupStep_content_expanded' "
                 "or @data-testid='SetupStep_content_collapsed']][1]"
@@ -34,7 +35,7 @@ class RunSetupPage(AppBasePage):
         root = self.step(title)
         expanded = root.get_by_test_id("SetupStep_content_expanded")
         if expanded.count() == 0 or not expanded.is_visible():
-            root.get_by_text(title, exact=True).first.click()
+            root.get_by_text(exact_text(title)).first.click()
         expect(root.get_by_test_id("SetupStep_content_expanded")).to_be_visible()
         return root
 
@@ -51,7 +52,7 @@ class RunSetupPage(AppBasePage):
             "Disabled",
         )
         for value in known:
-            locator = root.get_by_text(value, exact=True)
+            locator = root.get_by_text(exact_text(value))
             if locator.count() > 0:
                 return value
         return ""

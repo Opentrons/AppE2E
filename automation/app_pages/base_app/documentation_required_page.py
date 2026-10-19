@@ -10,6 +10,7 @@ import re
 
 from playwright.sync_api import Locator, Page
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 
 
@@ -23,7 +24,7 @@ class AppDocumentationRequired(AppBasePage):
     @property
     def heading(self) -> Locator:
         """Screen title. Confirm this copy on the desktop app."""
-        return self.page.get_by_text("Documentation required", exact=True)
+        return self.page.get_by_text(exact_text("Documentation required"))
 
     @property
     def note_field(self) -> Locator:
@@ -33,22 +34,22 @@ class AppDocumentationRequired(AppBasePage):
     @property
     def confirm_button(self) -> Locator:
         """Primary action that submits the note."""
-        return self.page.get_by_role("button", name="Confirm", exact=True)
+        return self.page.get_by_role("button", name=exact_text("Confirm"))
 
     @property
     def view_actions_button(self) -> Locator:
         """Opens the list of actions that must be documented."""
-        return self.page.get_by_role("button", name="View actions", exact=True)
+        return self.page.get_by_role("button", name=exact_text("View actions"))
 
     @property
     def back_button(self) -> Locator:
         """Leaves the documentation screen without submitting."""
-        return self.page.get_by_role("button", name="Back", exact=True)
+        return self.page.get_by_role("button", name=exact_text("Back"))
 
     @property
     def empty_note_error(self) -> Locator:
         """Error for a blank note. Replace the text once the desktop copy is known."""
-        return self.page.get_by_text("Documentation is required", exact=True)
+        return self.page.get_by_text(exact_text("Documentation is required"))
 
     @property
     def short_note_error(self) -> Locator:
@@ -70,6 +71,5 @@ class AppDocumentationRequired(AppBasePage):
     def confirm_note(self, note: str) -> None:
         """Submit ``note`` and require the documentation screen to close."""
         raise NotImplementedError(
-            "Fill in from the live desktop Documentation required screen. "
-            f"Planned note: {note!r}."
+            f"Fill in from the live desktop Documentation required screen. Planned note: {note!r}."
         )

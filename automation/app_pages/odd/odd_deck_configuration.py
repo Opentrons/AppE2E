@@ -6,6 +6,7 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_shell import OddShell
 
 # Option names on the Add modal. USB modules include a port suffix, so match the prefix.
@@ -43,18 +44,18 @@ class OddDeckConfigurationPage(OddShell):
         """
         self.dismiss_welcome_modal_if_present()
         if self.DECK_CONFIGURATION_URL.search(self.page.url):
-            expect(self.page.get_by_text("Deck configuration", exact=True)).to_be_visible(timeout=15_000)
+            expect(self.page.get_by_text(exact_text("Deck configuration"))).to_be_visible(timeout=15_000)
             return
         self.press(self.kebab_nav)
         deck = self.page.get_by_role("button", name="Deck configuration")
         expect(deck).to_be_visible(timeout=10_000)
         self.press(deck)
         expect(self.page).to_have_url(self.DECK_CONFIGURATION_URL, timeout=15_000)
-        expect(self.page.get_by_text("Deck configuration", exact=True)).to_be_visible(timeout=15_000)
+        expect(self.page.get_by_text(exact_text("Deck configuration"))).to_be_visible(timeout=15_000)
 
     def waste_chute(self) -> Locator:
         """Configured waste-chute button on the deck map."""
-        return self.page.get_by_role("button", name="Waste", exact=True)
+        return self.page.get_by_role("button", name=exact_text("Waste"))
 
     def empty_slot(self, slot_id: str) -> Locator:
         """Empty configurable slot, addressed by its addressable-area id (for example ``D3``)."""
@@ -62,7 +63,7 @@ class OddDeckConfigurationPage(OddShell):
 
     def module_button(self, label: str) -> Locator:
         """Configured deck button by its short label (for example ``Temperature`` or ``Stacker``)."""
-        return self.page.get_by_role("button", name=label, exact=True)
+        return self.page.get_by_role("button", name=exact_text(label))
 
     def configure_standard_deck(self) -> list[str]:
         """Add any missing pieces of the standard QA lab layout.
@@ -116,7 +117,7 @@ class OddDeckConfigurationPage(OddShell):
         modules = self.page.get_by_test_id("Modules")
         if modules.count() > 0 and modules.first.is_visible():
             self.press(modules.first)
-        add = self.page.get_by_role("button", name="Add", exact=True).and_(self.page.get_by_test_id(option))
+        add = self.page.get_by_role("button", name=exact_text("Add")).and_(self.page.get_by_test_id(option))
         expect(add.first).to_be_visible(timeout=15_000)
         self.press(add.first)
         expect(chooser).to_be_hidden(timeout=15_000)
@@ -160,7 +161,7 @@ class OddDeckConfigurationPage(OddShell):
         fixtures = self.page.get_by_test_id("Fixtures")
         if fixtures.count() > 0 and fixtures.first.is_visible():
             self.press(fixtures.first)
-        add = self.page.get_by_role("button", name="Add", exact=True).and_(
+        add = self.page.get_by_role("button", name=exact_text("Add")).and_(
             self.page.get_by_test_id("Staging Area Slot")
         )
         expect(add).to_be_visible(timeout=10_000)
@@ -198,7 +199,7 @@ class OddDeckConfigurationPage(OddShell):
         expect(chooser).to_be_visible(timeout=10_000)
         self.press(self.page.get_by_test_id("Fixtures"))
         self.press(self.page.get_by_test_id("Waste chute"))
-        add = self.page.get_by_role("button", name="Add", exact=True).and_(
+        add = self.page.get_by_role("button", name=exact_text("Add")).and_(
             self.page.get_by_test_id(self.WASTE_CHUTE_OPTION)
         )
         expect(add).to_be_visible(timeout=10_000)
@@ -208,7 +209,7 @@ class OddDeckConfigurationPage(OddShell):
 
     def save(self) -> None:
         """Press Save and leave Deck configuration."""
-        save = self.page.get_by_role("button", name="Save", exact=True)
+        save = self.page.get_by_role("button", name=exact_text("Save"))
         expect(save).to_be_visible(timeout=10_000)
         self.press(save)
         expect(self.page).not_to_have_url(self.DECK_CONFIGURATION_URL, timeout=15_000)

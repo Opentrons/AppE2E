@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import ProtocolsPage
 
@@ -50,7 +51,7 @@ def test_protocol_delete_cancel(run_local_app: Page, protocol_name: str) -> None
     page = run_local_app
     log_step(f"Open delete confirmation for '{protocol_name}'")
     ProtocolsPage(page).choose_overflow_action(protocol_name, "delete")
-    cancel = page.get_by_role("button", name="Cancel", exact=True)
+    cancel = page.get_by_role("button", name=exact_text("Cancel"))
     expect(cancel).to_be_visible()
     cancel.click()
     log_done("Delete confirmation cancelled")

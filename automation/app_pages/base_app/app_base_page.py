@@ -5,6 +5,7 @@ from __future__ import annotations
 from playwright.sync_api import Page, expect
 
 from automation.app_helpers.app_readiness import dismiss_blocking_toasts
+from automation.app_helpers.locator_helpers import exact_text
 from automation.base_page import BasePage
 
 
@@ -26,7 +27,7 @@ class AppBasePage(BasePage):
     def close_slideout_by_title(self, title: str) -> None:
         """Dismiss a slideout (app 4.x has no Slideout_title_* test ids)."""
         legacy_title = self.page.get_by_test_id(f"Slideout_title_{title}")
-        done = self.page.get_by_text("Done", exact=True)
+        done = self.page.get_by_text(exact_text("Done"))
         if done.count() > 0 and done.is_visible():
             done.click()
         else:

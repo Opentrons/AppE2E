@@ -6,6 +6,7 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import RoundTabBar, StatusChip
 
@@ -83,7 +84,7 @@ class ProtocolRunPage(AppBasePage):
 
     def read_run_time(self) -> str:
         """Return the value displayed beside the Run Time label."""
-        label = self.page.get_by_text("Run Time", exact=True)
+        label = self.page.get_by_text(exact_text("Run Time"))
         expect(label).to_be_visible()
         value = label.locator("xpath=following::*[self::p or self::span][1]")
         return value.inner_text().strip()

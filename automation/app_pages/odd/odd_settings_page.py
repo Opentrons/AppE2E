@@ -9,6 +9,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, Response, expect
 
 from automation.app_helpers import odd_config_ipc
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_settings import LanguageToggle
 from automation.app_pages.odd.odd_shell import OddShell
 
@@ -133,14 +134,14 @@ class OddSettingsPage(OddShell):
         software update screen. This does not wait for the install to finish.
         """
         self.press(self.page.get_by_test_id("RobotSettingButton_robot_system_version"))
-        available = self.page.get_by_text("Update available", exact=True)
-        update = self.page.get_by_role("button", name="Update", exact=True)
+        available = self.page.get_by_text(exact_text("Update available"))
+        update = self.page.get_by_role("button", name=exact_text("Update"))
         expect(available.or_(update).first).to_be_visible(timeout=15_000)
         if update.count() == 0 or not update.first.is_visible():
-            self.press(self.page.get_by_role("button", name="View update", exact=True))
+            self.press(self.page.get_by_role("button", name=exact_text("View update")))
         self.press(update)
         expect(self.page).to_have_url(re.compile(r"update-robot"), timeout=30_000)
-        expect(self.page.get_by_text("Update found!", exact=True)).to_be_visible(timeout=30_000)
+        expect(self.page.get_by_text(exact_text("Update found!"))).to_be_visible(timeout=30_000)
 
     def _choose_sleep(self, label: str) -> None:
         """Select a sleep radio. The input is hidden, so activate it directly."""
@@ -166,7 +167,7 @@ class OddSettingsPage(OddShell):
 
     def _confirm_documentation_if_needed(self) -> None:
         """Fill the audit note when access control asks for one."""
-        heading = self.page.get_by_text("Documentation required", exact=True)
+        heading = self.page.get_by_text(exact_text("Documentation required"))
         try:
             heading.wait_for(state="visible", timeout=3_000)
         except Exception:
@@ -193,7 +194,7 @@ class OddSettingsPage(OddShell):
             response = first.value
             assert response.ok
             assert _posted_bool(response) is posted_when_showing[original]
-            expect(button.get_by_text(flipped, exact=True)).to_be_visible(timeout=15_000)
+            expect(button.get_by_text(exact_text(flipped))).to_be_visible(timeout=15_000)
             return original
         finally:
             if changed:
@@ -203,7 +204,7 @@ class OddSettingsPage(OddShell):
                 restore = second.value
                 assert restore.ok
                 assert _posted_bool(restore) is posted_when_showing[flipped]
-                expect(button.get_by_text(original, exact=True)).to_be_visible(timeout=15_000)
+                expect(button.get_by_text(exact_text(original))).to_be_visible(timeout=15_000)
 
     def exercise_automatic_downloads(self) -> str:
         """Toggle automatic downloads, confirm the config IPC write, and restore.
@@ -220,7 +221,7 @@ class OddSettingsPage(OddShell):
             changed = True
             value = odd_config_ipc.wait_for_value(self.page, _AUTO_DOWNLOAD_PATH)
             assert value is expected
-            expect(button.get_by_text(flipped, exact=True)).to_be_visible(timeout=15_000)
+            expect(button.get_by_text(exact_text(flipped))).to_be_visible(timeout=15_000)
             return original
         finally:
             if changed:
@@ -228,7 +229,7 @@ class OddSettingsPage(OddShell):
                 self.press(button)
                 restored = odd_config_ipc.wait_for_value(self.page, _AUTO_DOWNLOAD_PATH)
                 assert restored is (original == "On")
-                expect(button.get_by_text(original, exact=True)).to_be_visible(timeout=15_000)
+                expect(button.get_by_text(exact_text(original))).to_be_visible(timeout=15_000)
 
     def exercise_touchscreen_sleep(self) -> str:
         """Pick a different sleep timeout, confirm ``sleepMs``, and restore the original radio.
@@ -322,7 +323,7 @@ class OddSettingsPage(OddShell):
         expect(button).to_be_visible(timeout=15_000)
         self.press(button)
         expect(self.back_button).to_be_visible(timeout=15_000)
-        expect(self.page.get_by_text("Resets cannot be undone", exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text("Resets cannot be undone"))).to_be_visible()
 
         checkbox = self.page.locator(f'input[type="checkbox"][id="{_CLEAR_ALL_STORED}"]')
         expect(checkbox).to_have_count(1, timeout=15_000)
@@ -332,9 +333,9 @@ class OddSettingsPage(OddShell):
         clear = self.page.get_by_test_id(_CLEAR_DATA_BUTTON)
         expect(clear).to_be_enabled()
         self.press(clear)
-        expect(self.page.get_by_text("Are you sure you want to reset your device?", exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text("Are you sure you want to reset your device?"))).to_be_visible()
 
-        confirm = self.page.get_by_role("button", name="Confirm", exact=True)
+        confirm = self.page.get_by_role("button", name=exact_text("Confirm"))
         with self.page.expect_response(_is_settings_reset, timeout=60_000) as posted:
             self.press(confirm)
             try:

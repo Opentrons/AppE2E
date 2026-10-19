@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable
 
 from playwright.sync_api import Locator, Page
+
+
+def exact_text(label: str) -> re.Pattern[str]:
+    """Match a whole label and ignore capitalization.
+
+    ``exact=True`` is case-sensitive, so Title Case vs sentence case fails the
+    locator. A try/except around that failure waits out the full expect timeout
+    before a second attempt. One case-insensitive pattern matches either form.
+    """
+    return re.compile(rf"^{re.escape(label)}$", re.IGNORECASE)
 
 
 def first_resolved(
@@ -37,8 +48,9 @@ def menu_item(
     exact: bool = True,
 ) -> Locator:
     """Locate a visible menu row by accessible name (menuitem, then button)."""
+    accessible_name: str | re.Pattern[str] = exact_text(name) if exact else name
     for role in ("menuitem", "button"):
-        item = scope.get_by_role(role, name=name, exact=exact)
+        item = scope.get_by_role(role, name=accessible_name)
         if item.count() > 0 and item.first.is_visible():
             return item.first
     raise RuntimeError(f"Menu item {name!r} not found in scope.")
@@ -57,12 +69,12 @@ def sidebar_nav_link(page: Page, *, href_fragment: str, label: str) -> Locator:
         return page.locator(f'[class*="navbar_link"][href="{hash_href}"], [class*="navbar_link"][href="{slash_href}"]')
 
     def _sidebar_by_role() -> Locator:
-        return page.get_by_role("link", name=label, exact=True).filter(
+        return page.get_by_role("link", name=exact_text(label)).filter(
             has=page.locator('[class*="nav_container"], [class*="navbar"]')
         )
 
     def _non_breadcrumb_link() -> Locator:
-        return page.get_by_role("link", name=label, exact=True).filter(has_not=page.locator('[class*="crumb_link"]'))
+        return page.get_by_role("link", name=exact_text(label)).filter(has_not=page.locator('[class*="crumb_link"]'))
 
     def _any_matching_link() -> Locator:
         return page.locator(f'a[href="{hash_href}"], a[href="{slash_href}"]').filter(

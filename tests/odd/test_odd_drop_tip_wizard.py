@@ -7,6 +7,7 @@ import re
 import pytest
 from playwright.sync_api import Page
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages.odd import OddInstrumentsPage
 
@@ -18,7 +19,7 @@ _PASSWORD = "testadminpassword"
 def _drop_tip_wizard_is_open(page: Page) -> bool:
     """True when a previous Drop tips attempt is still on screen."""
     open_wizard = (
-        page.get_by_text("Documentation required", exact=True)
+        page.get_by_text(exact_text("Documentation required"))
         .or_(page.get_by_text(re.compile(r"^Getting ready")))
         .or_(page.get_by_text("Before you begin, do you need to preserve aspirated liquid?"))
     )

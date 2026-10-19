@@ -17,6 +17,7 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_shell import OddShell
 
 # Move to the chute, blow out or drop, then home on exit.
@@ -97,7 +98,7 @@ class OddDropTipWizard(OddShell):
         Tip drop complete is the other Exit, and that is the one that ends
         the wizard. The gantry homes before the overlay goes away.
         """
-        footer_exit = self.page.get_by_role("button", name="Exit", exact=True).and_(
+        footer_exit = self.page.get_by_role("button", name=exact_text("Exit")).and_(
             self.page.locator("button:not([aria-label='Exit'])")
         )
         expect(footer_exit).to_be_visible(timeout=15_000)
@@ -117,7 +118,7 @@ class OddDropTipWizard(OddShell):
         Creating the maintenance run waits on this screen, so the wizard stays
         on "Getting ready…" until Confirm. Robots without access control skip it.
         """
-        heading = self.page.get_by_text("Documentation required", exact=True)
+        heading = self.page.get_by_text(exact_text("Documentation required"))
         if heading.count() == 0 or not heading.first.is_visible():
             return
         note = self.page.locator("textarea")
@@ -173,9 +174,9 @@ class OddDropTipWizard(OddShell):
 
     def _expect_text_or_error(self, text: str, *, _docs_attempts: int = 0) -> None:
         """Wait for a success screen, and fail immediately if the wizard shows an error."""
-        success = self.page.get_by_text(text, exact=True)
+        success = self.page.get_by_text(exact_text(text))
         error = self.page.get_by_text(_WIZARD_ERROR)
-        docs = self.page.get_by_text("Documentation required", exact=True)
+        docs = self.page.get_by_text(exact_text("Documentation required"))
         expect(success.or_(error).or_(docs).first).to_be_visible(timeout=_MOTION_TIMEOUT_MS)
         if docs.count() > 0 and docs.first.is_visible():
             if _docs_attempts >= 3:

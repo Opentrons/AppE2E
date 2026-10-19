@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from playwright.sync_api import Locator, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_readings import ProtocolRunRecord
 from automation.app_pages.odd.odd_shell import OddShell
 
@@ -62,7 +63,7 @@ class FileManagerProtocolRunRecord(OddShell):
         records. The rows are also stored on ``self.readings.protocol_run_records``.
         """
         root = self.page.locator('[data-sentry-component="ProtocolRunRecords"]')
-        empty = self.page.get_by_text(self.NO_RUN_RECORDS, exact=True)
+        empty = self.page.get_by_text(exact_text(self.NO_RUN_RECORDS))
         expect(root.or_(empty).first).to_be_visible(timeout=15_000)
         rows = root.locator('[data-testid^="ListItem_"]')
         try:
@@ -81,14 +82,14 @@ class FileManagerProtocolRunRecord(OddShell):
 
     def click_protocol_run_record(self) -> list[ProtocolRunRecord]:
         """Open File Manager → Protocol Run Records, print the table, and go back."""
-        tab = self.page.get_by_text(self.PROTOCOL_RUN_RECORDS, exact=True)
+        tab = self.page.get_by_text(exact_text(self.PROTOCOL_RUN_RECORDS))
         if tab.count() == 0 or not tab.first.is_visible():
-            row = self.page.get_by_text(self.FILE_MANAGER, exact=True)
+            row = self.page.get_by_text(exact_text(self.FILE_MANAGER))
             if row.count() == 0 or not row.first.is_visible():
                 self.open_settings()
             expect(row.first).to_be_visible(timeout=15_000)
             row.first.click()
-            tab = self.page.get_by_text(self.PROTOCOL_RUN_RECORDS, exact=True)
+            tab = self.page.get_by_text(exact_text(self.PROTOCOL_RUN_RECORDS))
         expect(tab.first).to_be_visible(timeout=15_000)
         tab.first.click()
         records = self.read_protocol_run_records()
@@ -113,7 +114,7 @@ class NetworkSettings(OddShell):
 
     def detail_value(self, label: str) -> str:
         """Return the text shown beside a details-modal label."""
-        name = self.page.get_by_text(label, exact=True)
+        name = self.page.get_by_text(exact_text(label))
         expect(name).to_be_visible(timeout=15_000)
         value = name.locator("..").locator("p").last
         expect(value).to_be_visible()
@@ -137,15 +138,15 @@ class NetworkSettings(OddShell):
         Network settings row is not already on screen. View details is clicked
         directly when the Wi-Fi screen is already showing.
         """
-        view_details = self.page.get_by_text(self.VIEW_DETAILS, exact=True)
+        view_details = self.page.get_by_text(exact_text(self.VIEW_DETAILS))
         if view_details.count() == 0 or not view_details.first.is_visible():
-            network_settings = self.page.get_by_text(self.NETWORK_SETTINGS, exact=True)
+            network_settings = self.page.get_by_text(exact_text(self.NETWORK_SETTINGS))
             if network_settings.count() == 0 or not network_settings.first.is_visible():
                 self.open_settings()
             expect(network_settings.first).to_be_visible(timeout=15_000)
             network_settings.first.click()
-            self.page.get_by_text(self.CONNECTED, exact=True).first.click()
-            view_details = self.page.get_by_text(self.VIEW_DETAILS, exact=True)
+            self.page.get_by_text(exact_text(self.CONNECTED)).first.click()
+            view_details = self.page.get_by_text(exact_text(self.VIEW_DETAILS))
         expect(view_details.first).to_be_visible(timeout=15_000)
         view_details.first.click()
         details = self.read_connection_details()
@@ -166,7 +167,7 @@ class RobotSystemVersion(OddShell):
 
     def current_version(self) -> str:
         """Return the text shown beside the Current Version label."""
-        label = self.page.get_by_text(self.CURRENT_VERSION, exact=True)
+        label = self.page.get_by_text(exact_text(self.CURRENT_VERSION))
         expect(label).to_be_visible(timeout=15_000)
         value = label.locator("..").locator("p").last
         expect(value).to_be_visible()
@@ -205,11 +206,11 @@ class LanguageToggle(OddShell):
 
     def _option(self, label: str) -> Locator:
         """A language choice. These are labels, and the names are not translated."""
-        return self.page.get_by_text(label, exact=True)
+        return self.page.get_by_text(exact_text(label))
 
     def _header(self, name: str) -> Locator:
         """Language screen title."""
-        return self.page.get_by_role("heading", name=name, exact=True)
+        return self.page.get_by_role("heading", name=exact_text(name))
 
     def click_language(self) -> None:
         """Open Language from Robot Settings, switch to 中文, then restore English (US)."""

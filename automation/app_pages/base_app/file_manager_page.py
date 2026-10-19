@@ -14,6 +14,7 @@ from automation.app_helpers.download_collisions import (
     DEFAULT_DOWNLOADS_DIR,
     prepare_file_manager_downloads,
 )
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.robot_settings_page import RobotSettingsPage
 from automation.app_pages.components import BasicButton, ListAccordion, RowCheckbox, StatusChip
@@ -81,7 +82,7 @@ def _section_by_title(page: Page, title: str) -> Locator:
     The section root is the parent of ``FileManagementSectionHeader``.
     """
     header = page.locator('[data-sentry-component="FileManagementSectionHeader"]').filter(
-        has=page.get_by_text(title, exact=True)
+        has=page.get_by_text(exact_text(title))
     )
     expect(header).to_be_visible()
     return header.locator("xpath=..")
@@ -98,7 +99,7 @@ class DiagnosticFilesSection(FileSection):
         return [label.inner_text().strip() for label in labels.all() if label.is_visible()]
 
     def select(self, name: str) -> None:
-        label = self.root.get_by_text(name, exact=True)
+        label = self.root.get_by_text(exact_text(name))
         expect(label).to_have_count(1)
         RowCheckbox(label.locator("..")).check()
 
@@ -118,7 +119,7 @@ class ProtocolRunRecordsSection(FileSection):
         return self.root.locator('[data-sentry-component="ListAccordion"]')
 
     def is_empty(self) -> bool:
-        empty = self.root.get_by_text(self.NO_RECENT_RUNS, exact=True)
+        empty = self.root.get_by_text(exact_text(self.NO_RECENT_RUNS))
         return empty.count() > 0 and empty.first.is_visible()
 
     def rows(self) -> list[RunRecord]:
@@ -185,9 +186,7 @@ class FileManagerPage(AppBasePage):
 
     @property
     def file_manager_url(self) -> re.Pattern[str]:
-        return re.compile(
-            rf"#/devices/{re.escape(self.robot_name)}/robot-settings/file-manager"
-        )
+        return re.compile(rf"#/devices/{re.escape(self.robot_name)}/robot-settings/file-manager")
 
     @property
     def root(self) -> Locator:
@@ -202,11 +201,9 @@ class FileManagerPage(AppBasePage):
             try:
                 expect(self.page).to_have_url(self.file_manager_url, timeout=10_000)
             except AssertionError:
-                RobotSettingsPage(self.page, robot_name=self.robot_name).navigate(
-                    tab=("File manager", "file-manager")
-                )
+                RobotSettingsPage(self.page, robot_name=self.robot_name).navigate(tab=("File manager", "file-manager"))
         expect(self.root).to_be_visible()
-        expect(self.page.get_by_text(self.ROBOT_STORAGE, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.ROBOT_STORAGE))).to_be_visible()
 
     def prepare_downloads(self) -> Path:
         """Clear collision files and route saves to Downloads (no OS Save picker)."""
@@ -215,19 +212,13 @@ class FileManagerPage(AppBasePage):
 
     def wait_for_download_started(self, *, timeout: float = 15_000) -> None:
         """Fail fast if Download selected never kicked off the in-progress toast."""
-        toast = self.page.get_by_test_id("Toast_info").filter(
-            has_text=self.DOWNLOAD_IN_PROGRESS
-        )
+        toast = self.page.get_by_test_id("Toast_info").filter(has_text=self.DOWNLOAD_IN_PROGRESS)
         expect(toast).to_be_visible(timeout=timeout)
 
     def wait_for_download_success(self, *, timeout: float | None = None) -> None:
         """Wait for the success toast after Download selected."""
-        toast = self.page.get_by_test_id("Toast_success").filter(
-            has_text=self.DOWNLOAD_SUCCESS
-        )
-        expect(toast).to_be_visible(
-            timeout=self.DOWNLOAD_TIMEOUT_MS if timeout is None else timeout
-        )
+        toast = self.page.get_by_test_id("Toast_success").filter(has_text=self.DOWNLOAD_SUCCESS)
+        expect(toast).to_be_visible(timeout=self.DOWNLOAD_TIMEOUT_MS if timeout is None else timeout)
 
     def expect_download_file(self, filename: str, *, timeout: float | None = None) -> Path:
         """Wait until ``filename`` exists and is non-empty under the prepared Downloads dir."""
@@ -253,11 +244,7 @@ class FileManagerPage(AppBasePage):
             timeout=timeout,
         )
         intercepts = self.page.evaluate("() => window.__otSaveDirIntercepts || []")
-        return next(
-            call
-            for call in reversed(intercepts)
-            if call.get("destination")
-        )
+        return next(call for call in reversed(intercepts) if call.get("destination"))
 
     def complete_diagnostic_download(
         self,
@@ -298,7 +285,7 @@ class FileManagerPage(AppBasePage):
 
     def diagnostics(self) -> DiagnosticFilesSection:
         root = self.page.locator('[data-sentry-component="DiagnosticsFiles"]').filter(
-            has=self.page.get_by_text("Diagnostic Files", exact=True)
+            has=self.page.get_by_text(exact_text("Diagnostic Files"))
         )
         if root.count() == 0:
             root = _section_by_title(self.page, "Diagnostic Files")

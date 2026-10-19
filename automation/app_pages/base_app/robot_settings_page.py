@@ -7,6 +7,7 @@ import re
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import dismiss_blocking_ui
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.devices_page import DevicesPage
 from automation.app_pages.components import Banner, RoundTabBar, ToggleSwitch
@@ -150,7 +151,7 @@ class RobotSettingsPage(AppBasePage):
     def _exercise_camera_usage_switch(self, row_title: str) -> None:
         """Flip a Usage Settings row switch (Robot Settings reuses Live video aria-labels)."""
         usage = self.page.locator('[data-sentry-component="RobotSettingsCameraUsage"]')
-        row = usage.locator("div").filter(has=self.page.get_by_text(row_title, exact=True)).first
+        row = usage.locator("div").filter(has=self.page.get_by_text(exact_text(row_title))).first
         switch = row.get_by_role("switch")
         expect(switch).to_be_visible()
         was_on = switch.get_attribute("aria-checked") == "true"
@@ -163,7 +164,7 @@ class RobotSettingsPage(AppBasePage):
     def validate_calibration_about(self) -> None:
         """T69745: Calibration > About Calibration."""
         self.open_tab("Calibration", "calibration")
-        expect(self.page.get_by_text(self.ABOUT_CALIBRATION, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.ABOUT_CALIBRATION))).to_be_visible()
 
     def validate_calibration_pipettes(self) -> None:
         """T69746: Robot Settings > Calibration > Pipette Calibrations.
@@ -176,7 +177,7 @@ class RobotSettingsPage(AppBasePage):
 
         dismiss_blocking_ui(self.page)
         self.open_tab("Calibration", "calibration")
-        expect(self.page.get_by_text(self.PIPETTE_CALIBRATIONS, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.PIPETTE_CALIBRATIONS))).to_be_visible()
 
         calibration = CalibrationHelper(self.page, robot_name=self.robot_name)
         calibration.wait_for_calibration_data()
@@ -202,12 +203,12 @@ class RobotSettingsPage(AppBasePage):
         """
         self.open_tab("Camera", "camera")
         camera = self.page.locator('[data-sentry-component="RobotSettingsCamera"]')
-        expect(camera.get_by_text(self.CAMERA_STATUS, exact=True).first).to_be_visible()
+        expect(camera.get_by_text(exact_text(self.CAMERA_STATUS)).first).to_be_visible()
 
         self._exercise_switch(self.CAMERA_STATUS)
         ToggleSwitch(self.page, self.CAMERA_STATUS).turn_on()
 
-        expect(camera.get_by_text(self.USAGE_SETTINGS, exact=True)).to_be_visible()
+        expect(camera.get_by_text(exact_text(self.USAGE_SETTINGS))).to_be_visible()
         self._exercise_camera_usage_switch(self.LIVE_VIDEO)
         self._exercise_camera_usage_switch(self.ERROR_IMAGE_CAPTURE)
 
@@ -218,7 +219,7 @@ class RobotSettingsPage(AppBasePage):
     def read_displayed_robot_name(self) -> str:
         """Return the name shown under Advanced > Robot Name (may differ from fixture)."""
         scope = self.page.locator('[data-sentry-component="DisplayRobotName"]')
-        label = scope.get_by_text(self.ROBOT_NAME, exact=True)
+        label = scope.get_by_text(exact_text(self.ROBOT_NAME))
         expect(label).to_be_visible()
         value = scope.locator("p").filter(has_not_text=self.ROBOT_NAME).first
         expect(value).to_be_visible()
@@ -228,7 +229,7 @@ class RobotSettingsPage(AppBasePage):
         """Return the read-only Flex serial from Advanced > Robot Information."""
         self.navigate(tab=("Advanced", "advanced"))
         scope = self.page.locator('[data-sentry-component="RobotInformation"]')
-        label = scope.get_by_text("Robot Serial Number", exact=True)
+        label = scope.get_by_text(exact_text("Robot Serial Number"))
         expect(label).to_be_visible()
         return label.locator("..").locator("p").last.inner_text().strip()
 
@@ -236,7 +237,7 @@ class RobotSettingsPage(AppBasePage):
         """Return the read-only Robot server version from Advanced."""
         self.navigate(tab=("Advanced", "advanced"))
         # RobotServerVersion is a fragment — no data-sentry-component wrapper.
-        heading = self.page.get_by_text(self.ROBOT_SERVER_VERSION, exact=True)
+        heading = self.page.get_by_text(exact_text(self.ROBOT_SERVER_VERSION))
         heading.scroll_into_view_if_needed()
         expect(heading).to_be_visible()
         return heading.locator("+ p").inner_text().strip()
@@ -253,7 +254,7 @@ class RobotSettingsPage(AppBasePage):
         expect(open_rename).to_be_visible()
         open_rename.click()
         # App 4.x Slideout dropped ``Slideout_title_*`` — wait on title text / input.
-        expect(self.page.get_by_text(self.RENAME_ROBOT_SLIDEOUT, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.RENAME_ROBOT_SLIDEOUT))).to_be_visible()
         expect(self._rename_robot_name_input()).to_be_visible()
 
     def _rename_robot_name_input(self) -> Locator:
@@ -290,7 +291,7 @@ class RobotSettingsPage(AppBasePage):
         prior run may have left the robot as ``{robot}TEST``.
         """
         self.navigate(tab=("Advanced", "advanced"))
-        expect(self.page.get_by_text(self.ROBOT_NAME, exact=True).first).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.ROBOT_NAME)).first).to_be_visible()
 
         configured_name = self.robot_name
         current_name = self.read_displayed_robot_name()
@@ -315,13 +316,13 @@ class RobotSettingsPage(AppBasePage):
         self._open_rename_slideout()
         self.submit_robot_rename(configured_name)
         self.navigate(tab=("Advanced", "advanced"))
-        expect(self.page.get_by_text(configured_name, exact=True).first).to_be_visible()
+        expect(self.page.get_by_text(exact_text(configured_name)).first).to_be_visible()
 
     def validate_advanced_robot_server_version(self) -> None:
         """T69750: Advanced > Robot server version."""
         self.navigate(tab=("Advanced", "advanced"))
         # RobotServerVersion is a fragment — no data-sentry-component wrapper.
-        heading = self.page.get_by_text(self.ROBOT_SERVER_VERSION, exact=True)
+        heading = self.page.get_by_text(exact_text(self.ROBOT_SERVER_VERSION))
         heading.scroll_into_view_if_needed()
         expect(heading).to_be_visible()
         # Next sibling <p> is ``vX.Y.Z`` when connected, else ``Unknown``.
@@ -330,13 +331,13 @@ class RobotSettingsPage(AppBasePage):
     def validate_advanced_pause_on_door_open(self) -> None:
         """T69751: Advanced > Pause protocol when robot door opens (OT-2 only)."""
         self.navigate(tab=("Advanced", "advanced"))
-        expect(self.page.get_by_text(self.PAUSE_PROTOCOL, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.PAUSE_PROTOCOL))).to_be_visible()
         expect(self.page.get_by_role("switch", name=self.PAUSE_PROTOCOL)).to_be_visible()
 
     def validate_advanced_jupyter_notebook(self) -> None:
         """T69753: Advanced > Jupyter Notebook (below the fold on Advanced)."""
         self.navigate(tab=("Advanced", "advanced"))
-        heading = self.page.get_by_text(self.JUPYTER_NOTEBOOK, exact=True)
+        heading = self.page.get_by_text(exact_text(self.JUPYTER_NOTEBOOK))
         launch = self.page.get_by_role("button", name=self.LAUNCH_JUPYTER_NOTEBOOK)
         heading.scroll_into_view_if_needed()
         expect(heading).to_be_visible()
@@ -345,7 +346,7 @@ class RobotSettingsPage(AppBasePage):
     def validate_advanced_update_robot_software(self) -> None:
         """T69754: Advanced > Update robot software."""
         self.navigate(tab=("Advanced", "advanced"))
-        heading = self.page.get_by_text(self.UPDATE_ROBOT_SOFTWARE, exact=True)
+        heading = self.page.get_by_text(exact_text(self.UPDATE_ROBOT_SOFTWARE))
         heading.scroll_into_view_if_needed()
         expect(heading).to_be_visible()
         expect(self.page.get_by_role("button", name="Browse file system")).to_be_visible()
@@ -360,7 +361,7 @@ class RobotSettingsPage(AppBasePage):
         self.open_tab("Camera", "camera")
         ToggleSwitch(self.page, self.CAMERA_STATUS).turn_on()
         usage = self.page.locator('[data-sentry-component="RobotSettingsCamera"]').get_by_text(
-            self.USAGE_SETTINGS, exact=True
+            exact_text(self.USAGE_SETTINGS)
         )
         expect(usage).to_be_visible()
         self._exercise_camera_usage_switch(self.LIVE_VIDEO)
@@ -369,7 +370,7 @@ class RobotSettingsPage(AppBasePage):
     def open_device_reset_slideout(self) -> None:
         """Advanced > Device Reset > Choose reset settings."""
         self.navigate(tab=("Advanced", "advanced"))
-        expect(self.page.get_by_text(self.DEVICE_RESET, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.DEVICE_RESET))).to_be_visible()
         choose = self.page.get_by_role("button", name=self.CHOOSE_RESET_SETTINGS)
         expect(choose).to_be_visible()
         choose.scroll_into_view_if_needed()
@@ -411,7 +412,7 @@ class RobotSettingsPage(AppBasePage):
         clear_btn = self.page.get_by_role("button", name=self.CLEAR_DATA_AND_RESTART)
         expect(clear_btn).to_be_enabled()
         clear_btn.click()
-        expect(self.page.get_by_text(self.RESET_TO_FACTORY_TITLE, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.RESET_TO_FACTORY_TITLE))).to_be_visible()
         confirm = self.page.get_by_role("button", name=self.CONFIRM_RESET)
         expect(confirm).to_be_visible()
         confirm.click()

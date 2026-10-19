@@ -6,6 +6,7 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.devices_page import DevicesPage
 
@@ -86,7 +87,7 @@ class DeckConfigurationPage(AppBasePage):
 
     def module_button(self, label: str) -> Locator:
         """Configured deck button by accessible name (e.g. ``Temperature``, ``Stacker``)."""
-        return self.page.get_by_role("button", name=label, exact=True)
+        return self.page.get_by_role("button", name=exact_text(label))
 
     def add_modal(self) -> Locator:
         return self.page.get_by_role("dialog", name="ModalShell_ModalArea")
@@ -211,7 +212,7 @@ class DeckConfigurationPage(AppBasePage):
         when Identify is present. Intersect role=Add with the option testid so we
         never click Identify (``.first`` on the testid alone).
         """
-        return self.page.get_by_role("button", name="Add", exact=True).and_(self.page.get_by_test_id(option))
+        return self.page.get_by_role("button", name=exact_text("Add")).and_(self.page.get_by_test_id(option))
 
     def _click_option_add(self, option: str | re.Pattern[str]) -> None:
         """Click the primary Add control for the given FixtureOption testid/pattern."""

@@ -9,6 +9,7 @@ from typing import Literal
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.app_readiness import click_visible_overlays
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.robot_settings_page import RobotSettingsPage
 
@@ -121,10 +122,10 @@ class CalibrationHelper(AppBasePage):
 
     def expect_loaded(self) -> None:
         """Wait for the main calibration sections and instrument data to render."""
-        expect(self.page.get_by_text(self.ABOUT_CALIBRATION, exact=True)).to_be_visible()
-        expect(self.page.get_by_text(self.PIPETTE_CALIBRATIONS, exact=True)).to_be_visible()
-        expect(self.page.get_by_text(self.GRIPPER_CALIBRATION, exact=True)).to_be_visible()
-        expect(self.page.get_by_text(self.MODULE_CALIBRATION, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.ABOUT_CALIBRATION))).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.PIPETTE_CALIBRATIONS))).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.GRIPPER_CALIBRATION))).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.MODULE_CALIBRATION))).to_be_visible()
         self.wait_for_calibration_data()
 
     def wait_for_calibration_data(self) -> None:
@@ -133,13 +134,13 @@ class CalibrationHelper(AppBasePage):
             self.pipette_overflow_button()
             .or_(self.gripper_overflow_button())
             .or_(self.module_overflow_buttons().first)
-            .or_(self.page.get_by_text(self.NOT_CALIBRATED, exact=True))
-            .or_(self.page.get_by_text(self.NO_CALIBRATION_REQUIRED, exact=True))
+            .or_(self.page.get_by_text(exact_text(self.NOT_CALIBRATED)))
+            .or_(self.page.get_by_text(exact_text(self.NO_CALIBRATION_REQUIRED)))
         )
         try:
             expect(loaded.first).to_be_visible(timeout=30_000)
         except AssertionError as exc:
-            if self.page.get_by_text("No pipette attached", exact=True).is_visible():
+            if self.page.get_by_text(exact_text("No pipette attached")).is_visible():
                 raise RuntimeError(
                     "Robot Settings > Calibration shows 'No pipette attached'. "
                     "Ensure QA1Potato is connectable before running calibration tests."
@@ -178,9 +179,9 @@ class CalibrationHelper(AppBasePage):
 
     def _status_from_row(self, row: Locator) -> str:
         """Read Last Calibrated cell text, including nested ``Not calibrated`` spans."""
-        if row.get_by_text(self.NOT_CALIBRATED, exact=True).count() > 0:
+        if row.get_by_text(exact_text(self.NOT_CALIBRATED)).count() > 0:
             return self.NOT_CALIBRATED
-        if row.get_by_text(self.NO_CALIBRATION_REQUIRED, exact=True).count() > 0:
+        if row.get_by_text(exact_text(self.NO_CALIBRATION_REQUIRED)).count() > 0:
             return self.NO_CALIBRATION_REQUIRED
         cells = row.locator("td")
         return cells.nth(cells.count() - 2).inner_text().strip()
@@ -284,7 +285,7 @@ class CalibrationHelper(AppBasePage):
         if any(marker.lower() in item.label.lower() for marker in ("96", "p1000_96")):
             return True
         row = self._row_from_overflow(self.overflow_button_for_item(item))
-        return row.get_by_text("Both", exact=True).count() > 0
+        return row.get_by_text(exact_text("Both")).count() > 0
 
     def overflow_button_for_item(self, item: CalibrationItem) -> Locator:
         if item.category == "pipette":
@@ -308,8 +309,8 @@ class CalibrationHelper(AppBasePage):
             return (
                 self.page.get_by_role("button", name="Calibrate gripper")
                 .or_(self.page.get_by_role("button", name="Recalibrate gripper"))
-                .or_(self.page.get_by_text("Calibrate gripper", exact=True))
-                .or_(self.page.get_by_text("Recalibrate gripper", exact=True))
+                .or_(self.page.get_by_text(exact_text("Calibrate gripper")))
+                .or_(self.page.get_by_text(exact_text("Recalibrate gripper")))
             )
         return self.page.get_by_role("button", name="Calibrate module").or_(
             self.page.get_by_role("button", name="Recalibrate module")
@@ -516,7 +517,7 @@ class CalibrationHelper(AppBasePage):
         Its ``aria-label`` overrides the visible ``Exit`` text, so the accessible
         name is ``Results_exit``.
         """
-        return self.page.get_by_role("button", name=self.RESULTS_EXIT, exact=True)
+        return self.page.get_by_role("button", name=exact_text(self.RESULTS_EXIT))
 
     def click_results_exit(self) -> None:
         """Click the blue results Exit and confirm the wizard closed.
@@ -533,7 +534,7 @@ class CalibrationHelper(AppBasePage):
         try:
             expect(success_icon).to_be_hidden(timeout=15_000)
         except AssertionError:
-            header_exit = self.page.get_by_role("button", name=self.WIZARD_HEADER_EXIT, exact=True)
+            header_exit = self.page.get_by_role("button", name=exact_text(self.WIZARD_HEADER_EXIT))
             if header_exit.count() > 0 and header_exit.first.is_visible():
                 header_exit.first.click()
             expect(success_icon).to_be_hidden(timeout=WIZARD_STEP_TIMEOUT_MS)
@@ -542,7 +543,7 @@ class CalibrationHelper(AppBasePage):
 
     def expect_wizard_closed(self) -> None:
         """Wait until the wizard is gone and Robot Settings > Calibration is back."""
-        expect(self.page.get_by_text(self.ABOUT_CALIBRATION, exact=True)).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+        expect(self.page.get_by_text(exact_text(self.ABOUT_CALIBRATION))).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
 
     def run_96_channel_calibration(
         self, *, calibration_timeout_ms: float = PIPETTE_CALIBRATION_MOTION_TIMEOUT_MS
@@ -654,7 +655,7 @@ class CalibrationHelper(AppBasePage):
 
     def click_module_setup_finish(self) -> None:
         """Click Finish on the module setup success screen and return to Calibration."""
-        btn = self.page.get_by_role("button", name=self.MODULE_SETUP_FINISH, exact=True)
+        btn = self.page.get_by_role("button", name=exact_text(self.MODULE_SETUP_FINISH))
         expect(btn).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
         btn.click()
         self.expect_wizard_closed()

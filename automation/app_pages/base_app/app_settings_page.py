@@ -11,6 +11,7 @@ from automation.app_helpers.app_readiness import (
     click_when_ui_ready,
     dismiss_blocking_ui,
 )
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import ToggleSwitch
 
@@ -21,18 +22,26 @@ class AppSettingsPage(AppBasePage):
     CONNECT_IP_HEADING = "Connect to a Robot via IP Address"
     APP_SOFTWARE_VERSION = "App Software Version"
     SOFTWARE_UPDATE_HEADING = "Software Update"
-    UPDATE_ALERT_COPY = re.compile(r"Receive an alert when .+ software update is available\.")
-    # Sentence-case titles match current app i18n; Title Case kept for older builds.
-    ADVANCED_HEADING = re.compile(r"^Update [Cc]hannel$")
+    UPDATE_ALERT_COPY = re.compile(
+        r"Receive an alert when .+ software update is available\.",
+        re.IGNORECASE,
+    )
+    ADVANCED_HEADING = "Update channel"
     CUSTOM_LABWARE_HEADING = "Additional Custom Labware Source Folder"
     PREVENT_ROBOT_CACHING = "Prevent Robot Caching"
     CLEAR_UNAVAILABLE_ROBOTS = "Clear Unavailable Robots"
     CLEAR_ROBOTS_BUTTON = "Clear unavailable robots list"
-    DEVELOPER_TOOLS = re.compile(r"^Developer [Tt]ools$")
+    DEVELOPER_TOOLS = "Developer tools"
     FEATURE_FLAGS_TAB = "Feature Flags"
     SETUP_CONNECTION = "Set up connection"
     ADD_IP_HOSTNAME = "Add IP Address or Hostname"
     NAV_ARIA_LABEL = "App Settings"
+    VIEW_SOFTWARE_UPDATE = "View software update"
+    UP_TO_DATE = "Up to date"
+    ENABLE_UPDATE_NOTIFICATIONS = "Enable app update notifications"
+    DONE = "Done"
+    CHANGE_LABWARE_FOLDER = "Change labware source folder"
+    ADD_LABWARE_FOLDER = "Add labware source folder"
 
     TABS = (
         ("General", "general"),
@@ -48,13 +57,13 @@ class AppSettingsPage(AppBasePage):
         Prefer ``aria-label="App Settings"`` (current Navbar). Fall back to the
         legacy ``Navbar_settingsLink`` test id on older builds.
         """
-        by_aria = self.page.get_by_role("button", name=self.NAV_ARIA_LABEL, exact=True)
+        by_aria = self.page.get_by_role("button", name=exact_text(self.NAV_ARIA_LABEL))
         by_test_id = self.page.get_by_test_id("Navbar_settingsLink")
         return by_aria.or_(by_test_id).first
 
     def tab_link(self, name: str) -> Locator:
         """Return the sidebar link for an App Settings tab by visible name."""
-        return self.page.locator('a[href*="/app-settings/"]').get_by_text(name, exact=True)
+        return self.page.locator('a[href*="/app-settings/"]').get_by_text(exact_text(name))
 
     def navigate(self) -> None:
         """Open App Settings from the navbar."""
@@ -76,8 +85,8 @@ class AppSettingsPage(AppBasePage):
 
     def _close_connect_ip_slideout(self) -> None:
         """Dismiss the Connect via IP slideout (Slideout_* test ids were removed)."""
-        add_ip = self.page.get_by_text(self.ADD_IP_HOSTNAME, exact=True)
-        done = self.page.get_by_role("button", name="Done", exact=True)
+        add_ip = self.page.get_by_text(exact_text(self.ADD_IP_HOSTNAME))
+        done = self.page.get_by_role("button", name=exact_text(self.DONE))
         if done.count() > 0 and done.is_visible():
             done.click()
         else:
@@ -91,9 +100,9 @@ class AppSettingsPage(AppBasePage):
             opened = self._open_tab("General", "general")
             if not opened:
                 # Default App Settings route may already show General without a sidebar click.
-                expect(self.page.get_by_text(self.APP_SOFTWARE_VERSION, exact=True)).to_be_visible()
+                expect(self.page.get_by_text(exact_text(self.APP_SOFTWARE_VERSION))).to_be_visible()
 
-        heading = self.page.get_by_text(self.APP_SOFTWARE_VERSION, exact=True)
+        heading = self.page.get_by_text(exact_text(self.APP_SOFTWARE_VERSION))
         expect(heading).to_be_visible()
         version_text = heading.locator("xpath=following-sibling::*[1]").inner_text().strip()
         if not version_text:
@@ -102,19 +111,19 @@ class AppSettingsPage(AppBasePage):
 
     def validate_general(self) -> None:
         """Validate General tab: connect via IP, software version, and update alerts."""
-        expect(self.page.get_by_text(self.APP_SOFTWARE_VERSION, exact=True)).to_be_visible()
-        update_button = self.page.get_by_role("button", name="View software update", exact=True)
-        up_to_date = self.page.get_by_text("Up to date", exact=True)
+        expect(self.page.get_by_text(exact_text(self.APP_SOFTWARE_VERSION))).to_be_visible()
+        update_button = self.page.get_by_role("button", name=exact_text(self.VIEW_SOFTWARE_UPDATE))
+        up_to_date = self.page.get_by_text(exact_text(self.UP_TO_DATE))
         expect(update_button.or_(up_to_date)).to_be_visible()
 
-        expect(self.page.get_by_text(self.SOFTWARE_UPDATE_HEADING, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.SOFTWARE_UPDATE_HEADING))).to_be_visible()
         expect(self.page.get_by_text(self.UPDATE_ALERT_COPY)).to_be_visible()
-        expect(self.page.get_by_role("switch", name="Enable app update notifications")).to_be_visible()
+        expect(self.page.get_by_role("switch", name=exact_text(self.ENABLE_UPDATE_NOTIFICATIONS))).to_be_visible()
 
-        setup_connection = self.page.get_by_role("button", name=self.SETUP_CONNECTION, exact=True)
+        setup_connection = self.page.get_by_role("button", name=exact_text(self.SETUP_CONNECTION))
         setup_connection.scroll_into_view_if_needed()
         setup_connection.click()
-        add_ip = self.page.get_by_text(self.ADD_IP_HOSTNAME, exact=True)
+        add_ip = self.page.get_by_text(exact_text(self.ADD_IP_HOSTNAME))
         try:
             expect(add_ip).to_be_visible()
         finally:
@@ -129,23 +138,23 @@ class AppSettingsPage(AppBasePage):
     def validate_advanced(self) -> None:
         """Open Advanced and validate every settings section."""
         self._open_tab("Advanced", "advanced")
-        expect(self.page.get_by_text(self.ADVANCED_HEADING)).to_be_visible()
-        expect(self.page.get_by_text(self.CUSTOM_LABWARE_HEADING, exact=True)).to_be_visible()
-        change_folder = self.page.get_by_role("button", name="Change labware source folder", exact=True)
-        add_folder = self.page.get_by_role("button", name="Add labware source folder", exact=True)
+        expect(self.page.get_by_text(exact_text(self.ADVANCED_HEADING))).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.CUSTOM_LABWARE_HEADING))).to_be_visible()
+        change_folder = self.page.get_by_role("button", name=exact_text(self.CHANGE_LABWARE_FOLDER))
+        add_folder = self.page.get_by_role("button", name=exact_text(self.ADD_LABWARE_FOLDER))
         expect(change_folder.or_(add_folder)).to_be_visible()
-        expect(self.page.get_by_text(self.PREVENT_ROBOT_CACHING, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.PREVENT_ROBOT_CACHING))).to_be_visible()
         expect(self.page.get_by_role("switch", name="disable_robot_cache")).to_be_visible()
-        expect(self.page.get_by_text(self.CLEAR_UNAVAILABLE_ROBOTS, exact=True)).to_be_visible()
-        expect(self.page.get_by_role("button", name=self.CLEAR_ROBOTS_BUTTON, exact=True)).to_be_visible()
-        expect(self.page.get_by_text(self.DEVELOPER_TOOLS)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.CLEAR_UNAVAILABLE_ROBOTS))).to_be_visible()
+        expect(self.page.get_by_role("button", name=exact_text(self.CLEAR_ROBOTS_BUTTON))).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.DEVELOPER_TOOLS))).to_be_visible()
         expect(self.page.get_by_role("switch", name="enable_dev_tools")).to_be_visible()
 
     def validate_feature_flags(self) -> None:
         """Open Feature Flags when present and assert the tab heading is visible."""
         if not self._open_tab(self.FEATURE_FLAGS_TAB, "feature-flags"):
             return
-        expect(self.page.get_by_text(self.FEATURE_FLAGS_TAB, exact=True)).to_be_visible()
+        expect(self.page.get_by_text(exact_text(self.FEATURE_FLAGS_TAB))).to_be_visible()
 
     def validate_all_tabs(self) -> None:
         """Navigate to App Settings and validate every available tab."""

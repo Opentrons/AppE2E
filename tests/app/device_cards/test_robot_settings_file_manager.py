@@ -75,11 +75,7 @@ def test_diagnostic_files(run_local_app: Page, robot_name: str) -> None:
     if not rows:
         log_done("No diagnostic files present")
         return
-    target = (
-        diagnostics.TROUBLESHOOTING_LOGS
-        if diagnostics.TROUBLESHOOTING_LOGS in rows
-        else rows[0]
-    )
+    target = diagnostics.TROUBLESHOOTING_LOGS if diagnostics.TROUBLESHOOTING_LOGS in rows else rows[0]
     log_step(f"Select '{target}' and Download selected")
     zip_path = files.complete_diagnostic_download(diagnostics, target)
     log_done(f"Downloaded diagnostic file '{target}' → {zip_path.name}")

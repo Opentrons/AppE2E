@@ -6,6 +6,7 @@ import re
 
 from playwright.sync_api import Locator, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.odd.odd_shell import OddShell
 
 
@@ -41,12 +42,12 @@ class OddProtocolsPage(OddShell):
     def expect_protocols(self, protocol_names: tuple[str, ...]) -> None:
         """Assert exact protocol titles are visible on the ODD Protocols page."""
         for protocol_name in protocol_names:
-            expect(self.page.get_by_text(protocol_name, exact=True).first).to_be_visible(timeout=120_000)
+            expect(self.page.get_by_text(exact_text(protocol_name)).first).to_be_visible(timeout=120_000)
 
     def wait_for_protocol_inventory(self) -> None:
         """Wait until the Protocols page has rendered cards, pins, or the empty state."""
-        loaded = self.protocol_cards.first.or_(self.page.get_by_text("Pinned Protocols", exact=True)).or_(
-            self.page.get_by_text("No protocols to show!", exact=True)
+        loaded = self.protocol_cards.first.or_(self.page.get_by_text(exact_text("Pinned Protocols"))).or_(
+            self.page.get_by_text(exact_text("No protocols to show!"))
         )
         expect(loaded.first).to_be_visible(timeout=30_000)
 
@@ -54,7 +55,7 @@ class OddProtocolsPage(OddShell):
         """Return protocol titles that are not on the Protocols page."""
         missing: list[str] = []
         for protocol_name in protocol_names:
-            if self.page.get_by_text(protocol_name, exact=True).count() == 0:
+            if self.page.get_by_text(exact_text(protocol_name)).count() == 0:
                 missing.append(protocol_name)
         return tuple(missing)
 
@@ -110,7 +111,7 @@ class OddProtocolsPage(OddShell):
         """Assert Protocol Details setup entry points and walk detail tabs (C44418)."""
         expect(self.page.get_by_role("button", name="Start setup")).to_be_visible(timeout=15_000)
         for tab_name in self.DETAIL_TABS:
-            tab = self.page.get_by_role("button", name=tab_name, exact=True)
+            tab = self.page.get_by_role("button", name=exact_text(tab_name))
             if tab.count() == 0:
                 # Parameters may be omitted for protocols without RTPs.
                 continue
@@ -130,7 +131,7 @@ class OddProtocolsPage(OddShell):
             return True
         expect(pin).to_be_visible(timeout=15_000)
         pin.click()
-        max_pins = self.page.get_by_text("You've hit your max!", exact=True)
+        max_pins = self.page.get_by_text(exact_text("You've hit your max!"))
         if max_pins.count() > 0 and max_pins.is_visible():
             self.page.get_by_role("button", name="Close").click()
             return False
@@ -139,7 +140,7 @@ class OddProtocolsPage(OddShell):
 
     def expect_pinned_section(self) -> None:
         """Assert the Pinned Protocols carousel is present after a pin."""
-        expect(self.page.get_by_text("Pinned Protocols", exact=True)).to_be_visible(timeout=15_000)
+        expect(self.page.get_by_text(exact_text("Pinned Protocols"))).to_be_visible(timeout=15_000)
         pinned = self.page.get_by_test_id(re.compile(r"^(full|half|regular)_pinned_protocol_card$"))
         expect(pinned.first).to_be_visible(timeout=10_000)
 
@@ -162,8 +163,8 @@ class OddProtocolsPage(OddShell):
         expect(delete).to_be_visible(timeout=15_000)
         delete.scroll_into_view_if_needed()
         delete.click()
-        expect(self.page.get_by_text("Delete this protocol?", exact=True)).to_be_visible(timeout=10_000)
-        confirm = self.page.get_by_role("button", name="Delete", exact=True)
+        expect(self.page.get_by_text(exact_text("Delete this protocol?"))).to_be_visible(timeout=10_000)
+        confirm = self.page.get_by_role("button", name=exact_text("Delete"))
         expect(confirm).to_be_visible()
         confirm.click()
         expect(self.page).to_have_url(self.PROTOCOLS_URL, timeout=60_000)
