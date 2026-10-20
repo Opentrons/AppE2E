@@ -253,8 +253,8 @@ class RobotSettingsPage(AppBasePage):
         open_rename = self.page.get_by_role("button", name=self.RENAME_ROBOT)
         expect(open_rename).to_be_visible()
         open_rename.click()
-        # App 4.x Slideout dropped ``Slideout_title_*`` — wait on title text / input.
-        expect(self.page.get_by_text(exact_text(self.RENAME_ROBOT_SLIDEOUT))).to_be_visible()
+        # Title text also matches both Rename buttons (case-insensitive). The heading is unique.
+        expect(self.page.get_by_role("heading", name=self.RENAME_ROBOT_SLIDEOUT, exact=True)).to_be_visible()
         expect(self._rename_robot_name_input()).to_be_visible()
 
     def _rename_robot_name_input(self) -> Locator:

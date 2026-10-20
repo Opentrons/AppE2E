@@ -159,6 +159,32 @@ class ThermocyclerCard(ModuleCard):
     def set_block_temperature(self, celsius: str = "60") -> bool:
         return self._set_temperature(celsius, "Set block temperature", "Deactivate block")
 
+    # Lid to 80 °C and block to 60 °C on hardware.
+    HOLDING_TIMEOUT_MS = 180_000
+    HOLDING_AT_TARGET = re.compile(r"holding at target", re.IGNORECASE)
+
+    def wait_until_holding_at_target(self) -> None:
+        """Wait until the lid and block chips both read holding at target."""
+        card = self.page_object._module_card(self.serial_prefix).first
+        expect(card.get_by_test_id("lidTempStatus")).to_have_text(
+            self.HOLDING_AT_TARGET,
+            timeout=self.HOLDING_TIMEOUT_MS,
+        )
+        expect(card.get_by_test_id("blockStatus")).to_have_text(
+            self.HOLDING_AT_TARGET,
+            timeout=self.HOLDING_TIMEOUT_MS,
+        )
+
+    def deactivate(self, action: str) -> bool:
+        """Click Deactivate lid or Deactivate block in the overflow menu."""
+        if not self.page_object._open_module_overflow(self.serial_prefix):
+            return False
+        clicked = self.page_object._click_module_menu_button(self.serial_prefix, action)
+        if clicked:
+            print(f"  {action.lower()}")
+        self.page_object._dismiss_blocking_overlays()
+        return clicked
+
     def exercise(self) -> None:
         if not self.page_object._begin_module_exercise(self.spec, self.serial_prefix):
             return
@@ -173,13 +199,14 @@ class ThermocyclerCard(ModuleCard):
             self.page_object._dismiss_blocking_overlays()
             return
         print("  set block temperature to 60")
-        print("  heating for 10 seconds")
-        self.page_object.page.wait_for_timeout(10_000)
-        if not self.set_block_temperature("24"):
-            print("  Skipping return to 24 C — menu item not found.")
-            self.page_object._dismiss_blocking_overlays()
+        print("  waiting until lid and block are holding at target")
+        self.wait_until_holding_at_target()
+        if not self.deactivate("Deactivate lid"):
+            print("  Skipping deactivate lid — menu item not found.")
             return
-        print("  set block temperature to 24")
+        if not self.deactivate("Deactivate block"):
+            print("  Skipping deactivate block — menu item not found.")
+            return
 
 
 class HeaterShakerCard(ModuleCard):
