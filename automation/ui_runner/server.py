@@ -30,6 +30,7 @@ ARTIFACTS_DIR = ROOT / "artifacts"
 
 ENV_PATH = ROOT / ".env"
 DEFAULT_PROTOCOL_NAME = "Flex Smoke Test"
+DEFAULT_APP_PATH = "/Applications/Opentrons.app/Contents/MacOS/Opentrons"
 
 
 def _load_env_file(path: Path | None = None) -> dict[str, str]:
@@ -85,7 +86,28 @@ def resolve_run_defaults() -> dict[str, str]:
         or DEFAULT_PROTOCOL_NAME
     )
     robot_ip = os.environ.get("ROBOT_IP", "").strip() or file_values.get("ROBOT_IP", "").strip() or DEFAULT_ROBOT_IP
-    return {"robot_name": robot_name, "protocol_name": protocol_name, "robot_ip": robot_ip}
+    app_path = (
+        os.environ.get("OPENTRONS_APP_PATH", "").strip()
+        or file_values.get("OPENTRONS_APP_PATH", "").strip()
+        or DEFAULT_APP_PATH
+    )
+    return {
+        "robot_name": robot_name,
+        "protocol_name": protocol_name,
+        "robot_ip": robot_ip,
+        "app_path": app_path,
+    }
+
+
+def normalize_app_path(raw: str) -> str:
+    """Return an Opentrons executable path, raising when it is missing or not a file."""
+    value = raw.strip().strip('"').strip("'")
+    if not value:
+        raise ValueError("App path is required.")
+    path = Path(value).expanduser()
+    if not path.is_file():
+        raise ValueError(f"App path is not a file: {path}")
+    return str(path)
 
 
 def resolve_repo_path(relative_path: str) -> Path:
@@ -108,6 +130,7 @@ class RunRequest(BaseModel):
     robot_name: str = Field(min_length=1)
     protocol_name: str = Field(min_length=1)
     robot_ip: str = Field(min_length=1)
+    app_path: str = Field(min_length=1)
     flex_ready: bool = False
     headed: bool = True
 
@@ -255,6 +278,7 @@ class PytestRunner:
             robot_name = request.robot_name.strip()
             protocol_name = request.protocol_name.strip()
             robot_ip = request.robot_ip.strip()
+            app_path = normalize_app_path(request.app_path)
             if not robot_name or not protocol_name:
                 raise ValueError("Robot name and protocol name are required.")
             if not robot_ip:
@@ -267,6 +291,7 @@ class PytestRunner:
             environment["ROBOT_NAME"] = robot_name
             environment["PROTOCOL_NAME"] = protocol_name
             environment["ROBOT_IP"] = robot_ip
+            environment["OPENTRONS_APP_PATH"] = app_path
             if request.headed:
                 environment["HEADED"] = "1"
             else:
@@ -276,8 +301,13 @@ class PytestRunner:
                     "ROBOT_NAME": robot_name,
                     "PROTOCOL_NAME": protocol_name,
                     "ROBOT_IP": robot_ip,
+                    "OPENTRONS_APP_PATH": app_path,
                 }
             )
+            os.environ["ROBOT_NAME"] = robot_name
+            os.environ["PROTOCOL_NAME"] = protocol_name
+            os.environ["ROBOT_IP"] = robot_ip
+            os.environ["OPENTRONS_APP_PATH"] = app_path
             command = [
                 sys.executable,
                 "-m",
@@ -306,6 +336,7 @@ class PytestRunner:
                     "robot_name": robot_name,
                     "protocol_name": protocol_name,
                     "robot_ip": robot_ip,
+                    "app_path": app_path,
                 }
             )
             self._completion_task = asyncio.create_task(self._wait_for_completion())
@@ -386,7 +417,7 @@ async def disable_ui_cache(request, call_next):
 
 @app.get("/api/defaults")
 async def get_defaults() -> dict[str, str]:
-    """Robot and protocol names for the run form (env / .env / built-in)."""
+    """Robot, protocol, and app path for the run form (env / .env / built-in)."""
     return resolve_run_defaults()
 
 

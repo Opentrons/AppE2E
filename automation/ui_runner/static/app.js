@@ -38,6 +38,7 @@ const elements = {
   robotName: document.querySelector("#robot-name"),
   protocolName: document.querySelector("#protocol-name"),
   robotIp: document.querySelector("#robot-ip"),
+  appPath: document.querySelector("#app-path"),
   connection: document.querySelector("#connection"),
   selectionCovers: document.querySelector("#selection-covers"),
   runProgress: document.querySelector("#run-progress"),
@@ -244,7 +245,8 @@ function targetsFilled() {
   return Boolean(
     elements.robotName.value.trim() &&
       elements.protocolName.value.trim() &&
-      elements.robotIp.value.trim(),
+      elements.robotIp.value.trim() &&
+      elements.appPath.value.trim(),
   );
 }
 
@@ -288,6 +290,7 @@ function updateControls() {
   elements.robotName.disabled = state.runState !== "idle";
   elements.protocolName.disabled = state.runState !== "idle";
   elements.robotIp.disabled = state.runState !== "idle";
+  elements.appPath.disabled = state.runState !== "idle";
   updateRunBanner();
 }
 
@@ -467,6 +470,9 @@ async function loadDefaults() {
     if (!elements.robotIp.value && payload.robot_ip) {
       elements.robotIp.value = payload.robot_ip;
     }
+    if (!elements.appPath.value && payload.app_path) {
+      elements.appPath.value = payload.app_path;
+    }
   } catch {
     // Prefill is best-effort; the form still accepts manual values.
   } finally {
@@ -584,8 +590,9 @@ async function startRun() {
   const robotName = elements.robotName.value.trim();
   const protocolName = elements.protocolName.value.trim();
   const robotIp = elements.robotIp.value.trim();
-  if (!robotName || !protocolName || !robotIp) {
-    elements.runSummary.textContent = "Enter robot name, protocol name, and robot IP before running.";
+  const appPath = elements.appPath.value.trim();
+  if (!robotName || !protocolName || !robotIp || !appPath) {
+    elements.runSummary.textContent = "Enter robot name, protocol name, robot IP, and app path before running.";
     updateControls();
     return;
   }
@@ -605,6 +612,7 @@ async function startRun() {
         robot_name: robotName,
         protocol_name: protocolName,
         robot_ip: robotIp,
+        app_path: appPath,
         flex_ready: elements.flexReady.checked,
         headed: elements.headed.checked,
       }),
@@ -813,6 +821,7 @@ elements.flexReady.addEventListener("change", reconcileSelection);
 elements.robotName.addEventListener("input", updateControls);
 elements.protocolName.addEventListener("input", updateControls);
 elements.robotIp.addEventListener("input", updateControls);
+elements.appPath.addEventListener("input", updateControls);
 document.addEventListener("click", (event) => {
   const link = event.target.closest("[data-nav]");
   if (!link) return;

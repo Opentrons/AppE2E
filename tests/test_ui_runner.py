@@ -13,7 +13,15 @@ from fastapi.testclient import TestClient
 from automation.app_helpers.test_progress import log_done, log_step, run_timed, set_event_sink
 from automation.ui_runner.collect_plugin import _validate_prerequisites
 from automation.ui_runner.event_plugin import EventWriter
-from automation.ui_runner.server import ROOT, WorkflowCatalog, _upsert_env_keys, app, resolve_repo_path
+from automation.ui_runner.server import (
+    DEFAULT_APP_PATH,
+    ROOT,
+    WorkflowCatalog,
+    _upsert_env_keys,
+    app,
+    normalize_app_path,
+    resolve_repo_path,
+)
 
 
 def _catalog(tmp_path: Path) -> WorkflowCatalog:
@@ -152,13 +160,14 @@ def test_source_api_rejects_missing_and_unsafe_paths() -> None:
 def test_defaults_api_returns_robot_and_protocol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     env_path = tmp_path / ".env"
     env_path.write_text(
-        "ROBOT_NAME=UIRobot\nPROTOCOL_NAME=UI Protocol\nROBOT_IP=10.14.19.200\n",
+        "ROBOT_NAME=UIRobot\nPROTOCOL_NAME=UI Protocol\nROBOT_IP=10.14.19.200\nOPENTRONS_APP_PATH=/tmp/Opentrons\n",
         encoding="utf-8",
     )
     monkeypatch.setattr("automation.ui_runner.server.ENV_PATH", env_path)
     monkeypatch.delenv("ROBOT_NAME", raising=False)
     monkeypatch.delenv("PROTOCOL_NAME", raising=False)
     monkeypatch.delenv("ROBOT_IP", raising=False)
+    monkeypatch.delenv("OPENTRONS_APP_PATH", raising=False)
 
     client = TestClient(app)
     response = client.get("/api/defaults")
@@ -167,7 +176,31 @@ def test_defaults_api_returns_robot_and_protocol(tmp_path: Path, monkeypatch: py
         "robot_name": "UIRobot",
         "protocol_name": "UI Protocol",
         "robot_ip": "10.14.19.200",
+        "app_path": "/tmp/Opentrons",
     }
+
+
+def test_defaults_api_falls_back_to_installed_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("ROBOT_NAME=UIRobot\n", encoding="utf-8")
+    monkeypatch.setattr("automation.ui_runner.server.ENV_PATH", env_path)
+    monkeypatch.delenv("ROBOT_NAME", raising=False)
+    monkeypatch.delenv("PROTOCOL_NAME", raising=False)
+    monkeypatch.delenv("ROBOT_IP", raising=False)
+    monkeypatch.delenv("OPENTRONS_APP_PATH", raising=False)
+
+    client = TestClient(app)
+    response = client.get("/api/defaults")
+    assert response.status_code == 200
+    assert response.json()["app_path"] == DEFAULT_APP_PATH
+
+
+def test_normalize_app_path_requires_an_existing_file(tmp_path: Path) -> None:
+    executable = tmp_path / "Opentrons"
+    executable.write_bytes(b"")
+    assert normalize_app_path(f' "{executable}" ') == str(executable)
+    with pytest.raises(ValueError, match="not a file"):
+        normalize_app_path(str(tmp_path / "missing"))
 
 
 def test_upsert_env_keys_preserves_unrelated_entries(tmp_path: Path) -> None:
@@ -203,3 +236,4 @@ def test_spa_routes_serve_index() -> None:
         assert "Workflow test runner" in response.text
         assert 'data-nav="setup"' in response.text
         assert 'data-nav="run"' in response.text
+        assert 'id="app-path"' in response.text

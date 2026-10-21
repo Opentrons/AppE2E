@@ -70,10 +70,23 @@
                 placeholder="Flex IP for ODD CDP"
               />
             </label>
+            <label class="app-path-field">
+              <span>Path to app</span>
+              <input
+                id="app-path"
+                type="text"
+                name="app-path"
+                autocomplete="off"
+                spellcheck="false"
+                required
+                placeholder="/Applications/Opentrons.app/Contents/MacOS/Opentrons"
+              />
+            </label>
           </div>
           <p class="run-targets-hint">
             Robot name and protocol match the desktop app; robot IP is used for ODD CDP
-            (Developer Tools on, port 9223). Saved to <code>.env</code> when you run.
+            (Developer Tools on, port 9223). Path to app is the Opentrons executable
+            this run launches. Saved to <code>.env</code> as <code>OPENTRONS_APP_PATH</code> when you run.
           </p>
         </fieldset>
         <label class="readiness">

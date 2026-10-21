@@ -277,6 +277,10 @@ button:disabled {
   font-size: .85em;
 }
 
+.app-path-field {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 960px) {
   .run-target-fields {
     grid-template-columns: 1fr;
