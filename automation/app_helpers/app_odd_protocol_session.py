@@ -39,9 +39,12 @@ def desktop_app() -> Iterator[Page]:
             yield page
     finally:
         if browser is not None:
-            browser.close()
+            try:
+                browser.close()
+            except Exception:
+                pass
         if playwright is not None:
-            playwright.stop()
+            open_app.release_playwright()
         _stop_process(process)
 
 
@@ -56,6 +59,9 @@ def odd_app(robot_ip: str) -> Iterator[Page]:
             yield page
     finally:
         if browser is not None:
-            browser.close()
+            try:
+                browser.close()
+            except Exception:
+                pass
         if playwright is not None:
-            playwright.stop()
+            open_app.release_playwright()

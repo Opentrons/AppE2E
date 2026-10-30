@@ -15,12 +15,31 @@ from utility import _pause_for_debugging, troubleshoot_and_pause
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """Shared CLI options for app and ODD suites."""
+    """Shared CLI options for app and ODD suites.
+
+    Registered here so the UI runner can always pass them. Options in
+    ``tests/app/conftest.py`` are invisible unless that directory is collected.
+    """
     parser.addoption(
         "--robot-ip",
         action="store",
         default=None,
         help="Robot IP for Wi-Fi / ODD CDP (overrides ROBOT_IP env var). Any address works.",
+    )
+    parser.addoption(
+        "--robot-name",
+        action="store",
+        default=None,
+        help="Robot display name on the Devices page (overrides ROBOT_NAME env var).",
+    )
+    parser.addoption(
+        "--robot-profile",
+        action="store",
+        default=None,
+        help=(
+            "Launch profile (e.g. fake-robot starts make -C app dev + local robot-server). "
+            "Overrides --robot-name when set."
+        ),
     )
 
 

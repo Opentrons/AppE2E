@@ -30,6 +30,11 @@ def _open_run_setup(page: Page, protocol_name: str, robot_name: str) -> RunSetup
     else:
         run_page.wait_until_open()
     run_page.open_tab("Setup", "setup")
+    # Setup accordions replace the loading screen only after analysis finishes
+    # and the header action changes from "Analyzing on robot" to "Start run".
+    log_step("Wait for protocol analysis to finish")
+    run_page.wait_until_analysis_complete()
+    log_done("Start run is available")
     return RunSetupPage(page)
 
 

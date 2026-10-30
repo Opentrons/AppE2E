@@ -20,6 +20,11 @@ DEBUG_PORT = 9222
 ODD_CDP_PORT = 9223
 DEV_CDP_TIMEOUT_S = 180.0
 
+# One sync Playwright per process. A second sync_playwright().start() while the
+# desktop session is still attached raises "Sync API inside the asyncio loop".
+_shared_playwright: Playwright | None = None
+_playwright_refs = 0
+
 # Installed-app names vary slightly by installer/version (Opentrons.app,
 # Opentrons 8.5.0.app, Opentrons.exe, Opentrons Setup.exe is excluded).
 _MAC_APP_BUNDLE_RE = re.compile(r"^Opentrons(?:[ ._-].+)?\.app$", re.IGNORECASE)
@@ -301,24 +306,74 @@ def _find_app_page(browser: Browser) -> Page:
     raise RuntimeError("Could not find Opentrons app window")
 
 
+def _acquire_playwright(*, own: bool) -> tuple[Playwright, bool]:
+    """Start or reuse sync Playwright. Return it and whether this caller holds a ref."""
+    global _shared_playwright, _playwright_refs
+    created = _shared_playwright is None
+    if created:
+        _shared_playwright = sync_playwright().start()
+    holds_ref = own or created
+    if holds_ref:
+        _playwright_refs += 1
+    assert _shared_playwright is not None
+    return _shared_playwright, holds_ref
+
+
+def release_playwright() -> None:
+    """Drop one attach. Stop Playwright when the desktop and ODD sessions are both done."""
+    global _shared_playwright, _playwright_refs
+    if _playwright_refs > 0:
+        _playwright_refs -= 1
+    if _playwright_refs == 0 and _shared_playwright is not None:
+        try:
+            _shared_playwright.stop()
+        finally:
+            _shared_playwright = None
+
+
+def odd_cdp_is_ready(host: str, *, port: int | None = None) -> bool:
+    """Return True when the Flex touchscreen is listening for CDP."""
+    return _cdp_is_ready(port if port is not None else ODD_CDP_PORT, host=host)
+
+
+def wait_for_odd_cdp(host: str, *, timeout: float = 120, port: int | None = None) -> None:
+    """Poll until the Flex touchscreen debug port accepts connections."""
+    _wait_for_cdp(
+        port if port is not None else ODD_CDP_PORT,
+        timeout=timeout,
+        host=host,
+    )
+
+
 def connect_playwright(
     *,
     debug_port: int | None = None,
     host: str | None = None,
+    own: bool = True,
 ) -> tuple[Playwright, Browser, Page]:
-    """Connect Playwright to a running Opentrons app or ODD. Caller must stop Playwright."""
+    """Connect Playwright to a running Opentrons app or ODD.
+
+    Reuses the sync Playwright already started for this process. Call
+    :func:`release_playwright` once per ``own=True`` connect. ``own=False``
+    borrows that session (a CDP reattach) and must not release it.
+    """
     cdp_host, cdp_port = resolve_cdp_endpoint(host=host, port=debug_port)
-    playwright = sync_playwright().start()
+    playwright, holds_ref = _acquire_playwright(own=own)
     cdp_url = f"http://{cdp_host}:{cdp_port}"
     print(f"Connecting Playwright to {cdp_url}...")
-    browser = playwright.chromium.connect_over_cdp(cdp_url)
-    setattr(browser, CDP_HTTP_ATTR, cdp_url)
-    page = _find_app_page(browser)
     try:
-        page.bring_to_front()
+        browser = playwright.chromium.connect_over_cdp(cdp_url)
+        setattr(browser, CDP_HTTP_ATTR, cdp_url)
+        page = _find_app_page(browser)
+        try:
+            page.bring_to_front()
+        except Exception:
+            # Remote ODD / headless targets may not support window focus.
+            pass
     except Exception:
-        # Remote ODD / headless targets may not support window focus.
-        pass
+        if holds_ref:
+            release_playwright()
+        raise
     print(f"Connected to app window: '{page.title()}' ({page.url})")
     return playwright, browser, page
 
@@ -327,6 +382,7 @@ def connect_odd_playwright(
     *,
     host: str | None = None,
     debug_port: int | None = None,
+    own: bool = True,
 ) -> tuple[Playwright, Browser, Page]:
     """Attach to the Flex ODD over CDP (default port ``ODD_CDP_PORT`` / 9223).
 
@@ -347,7 +403,7 @@ def connect_odd_playwright(
             "Set ROBOT_IP / --robot-ip to the Flex address, enable Developer Tools "
             "on the ODD (Robot Settings), then retry."
         )
-    return connect_playwright(host=odd_host, debug_port=odd_port)
+    return connect_playwright(host=odd_host, debug_port=odd_port, own=own)
 
 
 def launch_and_connect(

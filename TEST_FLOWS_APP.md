@@ -225,7 +225,7 @@ flowchart LR
   upload --> runPage
   confirm --> runPage
   proceed --> runPage["Run page opens"]
-  runPage --> tabs["Click each tab that exists: Setup, Parameters, Module Controls, Run Preview, Camera"]
+  runPage --> tabs["Click each tab that exists: Setup, Parameters, Module Controls, Run Log, Camera"]
   tabs --> header["Read the status chip and the run timer. Any text is accepted"]
   header --> steps["For each of Instruments, Deck Hardware, Labware Offsets, Labware and Liquids, and Camera: expand the step and log its status chip"]
   steps --> stop["Stop. Setup is not completed and Start run is not clicked"]

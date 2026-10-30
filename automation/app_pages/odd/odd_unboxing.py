@@ -145,7 +145,7 @@ class OddUnboxingPage(OddShell):
         last_error: Exception | None = None
         while time.monotonic() < deadline:
             try:
-                _playwright, _browser, page = open_app.connect_odd_playwright(host=robot_ip)
+                _playwright, _browser, page = open_app.connect_odd_playwright(host=robot_ip, own=False)
             except (TimeoutError, OSError) as error:
                 last_error = error
                 # No page to wait on while the robot is off the network.

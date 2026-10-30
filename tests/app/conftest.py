@@ -60,25 +60,6 @@ def _resolve_robot_name(config: pytest.Config, profile: RobotProfile | None) -> 
     return os.environ.get("ROBOT_NAME", DEFAULT_HARDWARE_ROBOT_NAME).strip()
 
 
-def pytest_addoption(parser: pytest.Parser) -> None:
-    """Register robot name and launch profile CLI options."""
-    parser.addoption(
-        "--robot-name",
-        action="store",
-        default=None,
-        help="Robot display name on the Devices page (overrides ROBOT_NAME env var).",
-    )
-    parser.addoption(
-        "--robot-profile",
-        action="store",
-        default=None,
-        help=(
-            "Launch profile (e.g. fake-robot starts make -C app dev + local robot-server). "
-            "Overrides --robot-name when set."
-        ),
-    )
-
-
 def _terminate_process(process: subprocess.Popen | None) -> None:
     """Terminate a subprocess, escalating to kill when it does not exit in time."""
     if process is None:
@@ -214,7 +195,7 @@ def run_local_app(
         except Exception:
             pass
     if playwright is not None:
-        playwright.stop()
+        open_app.release_playwright()
     _terminate_process(process)
 
 

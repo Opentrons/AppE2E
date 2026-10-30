@@ -17,6 +17,9 @@ class ProtocolRunPage(AppBasePage):
     ANALYZING_ON_ROBOT = "Analyzing on robot"
     START_RUN = "Start run"
     PAUSE_RUN = "Pause run"
+    CANCEL_RUN = "Cancel run"
+    YES_CANCEL_RUN = "Yes, cancel run"
+    TERMINAL_STATUS = re.compile(r"^(Completed|Failed|Canceled)$", re.IGNORECASE)
     GO_BACK = "Go back"
     PROCEED_TO_RUN = "Proceed to run"
     PROCEED_TO_RUN_MODAL = "Are you sure you want to proceed to run?"
@@ -27,7 +30,7 @@ class ProtocolRunPage(AppBasePage):
         ("Setup", "setup"),
         ("Parameters", "runtime-parameters"),
         ("Module Controls", "module-controls"),
-        ("Run Preview", "run-preview"),
+        ("Run Log", "run-preview"),
         ("Camera", "camera"),
     )
 
@@ -142,6 +145,65 @@ class ProtocolRunPage(AppBasePage):
         if hs_proceed.count() > 0 and hs_proceed.is_visible():
             hs_proceed.click()
             expect(hs_proceed).to_be_hidden(timeout=15_000)
+
+    def cancel_button(self) -> Locator:
+        """Run header Cancel run button."""
+        return self.page.get_by_role("button", name=exact_text(self.CANCEL_RUN))
+
+    def confirm_cancel_button(self) -> Locator:
+        """Confirm-cancel modal button."""
+        return self.page.get_by_role("button", name=exact_text(self.YES_CANCEL_RUN))
+
+    def terminal_status_chip(self) -> Locator:
+        """Header chip once the run has completed, failed, or been canceled."""
+        return self.page.get_by_test_id(re.compile(r"^Chip_(success|error|warning)$")).filter(
+            has_text=self.TERMINAL_STATUS
+        )
+
+    def cancel_active_run(self) -> bool:
+        """Cancel run, then confirm Yes, cancel run.
+
+        Returns False when the header is not offering Cancel run.
+        """
+        confirm = self.confirm_cancel_button()
+        cancel = self.cancel_button()
+        try:
+            expect(confirm.or_(cancel).first).to_be_visible(timeout=15_000)
+        except AssertionError:
+            return False
+        if confirm.count() > 0 and confirm.first.is_visible():
+            confirm.first.click()
+        elif cancel.count() > 0 and cancel.first.is_visible():
+            cancel.first.click()
+            expect(confirm).to_be_visible(timeout=15_000)
+            confirm.click()
+        else:
+            return False
+        expect(confirm).to_be_hidden(timeout=30_000)
+        expect(cancel).to_be_hidden(timeout=180_000)
+        expect(self.terminal_status_chip().first).to_be_visible(timeout=180_000)
+        return True
+
+    def start_run_and_wait_until_finished(self, *, timeout_ms: int = 180_000) -> str:
+        """Click Start run and wait until the header chip is terminal.
+
+        A short protocol can finish before Pause run appears.
+        """
+        self.dismiss_warning_toast()
+        button = self.start_run_button()
+        expect(button).to_be_visible(timeout=60_000)
+        button.click()
+        terminal = self.terminal_status_chip()
+        missing_steps = self.missing_steps_modal()
+        proceed = self.page.get_by_role("button", name=self.PROCEED_TO_RUN)
+        expect(missing_steps.or_(proceed).or_(terminal).first).to_be_visible(timeout=30_000)
+        if missing_steps.count() > 0 and missing_steps.is_visible():
+            self.missing_steps_start_run_button().click()
+            expect(missing_steps).to_be_hidden(timeout=15_000)
+        elif proceed.count() > 0 and proceed.is_visible() and terminal.count() == 0:
+            proceed.click()
+        expect(terminal.first).to_be_visible(timeout=timeout_ms)
+        return terminal.first.inner_text().strip()
 
     def click_start_run(self) -> None:
         """Click header Start run, confirm any proceed modal, and wait until active."""

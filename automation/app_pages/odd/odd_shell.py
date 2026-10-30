@@ -11,6 +11,7 @@ import re
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.odd.odd_readings import OddReadings, readings_for
 
@@ -79,6 +80,71 @@ class OddShell(AppBasePage):
             next_btn.first.click()
             expect(next_btn).to_have_count(0, timeout=10_000)
 
+    def dismiss_canceled_run_if_present(self, *, wait_ms: float = 0) -> None:
+        """Leave the touchscreen when a test starts on the Run canceled splash.
+
+        Canceling a protocol leaves the ODD on a full-screen button whose
+        heading is "Run canceled". Tap that splash, then Return to dashboard.
+        If tips are still on a pipette, remove them before the dashboard opens.
+        ``wait_ms`` waits for the splash to appear. ``0`` only acts when it is
+        already on screen.
+        """
+        from automation.app_helpers.test_progress import log_done, log_step
+
+        splash = self.page.get_by_role("heading", name=exact_text("Run canceled"), level=1)
+        returning = self._return_to_dashboard_button()
+        if self._is_visible(self.protocols_nav) and not self._is_visible(splash):
+            return
+        if wait_ms > 0 and not self._is_visible(splash) and not self._is_visible(returning):
+            try:
+                expect(splash.or_(returning).first).to_be_visible(timeout=wait_ms)
+            except AssertionError:
+                return
+        if not self._is_visible(splash) and not self._is_visible(returning):
+            return
+
+        if self._is_visible(splash):
+            log_step("Run canceled splash is up after the protocol was canceled")
+            splash_button = self.page.get_by_role("button").filter(has=splash)
+            self.press(splash_button.first)
+            expect(returning).to_be_visible(timeout=60_000)
+
+        log_step("Return to dashboard after the canceled run")
+        self.press(returning)
+        self._finish_canceled_run()
+        log_done("Dashboard is open after the canceled run")
+
+    def _return_to_dashboard_button(self) -> Locator:
+        """The summary LargeButton, not the full-screen button wrapped around it.
+
+        The run summary is one outer ``<button>``. Its accessible name includes
+        "Return to dashboard", and clicking that outer button does nothing once
+        the splash is gone. The control that leaves the run is the inner button
+        whose label is the paragraph "Return to dashboard".
+        """
+        label = self.page.locator("p", has_text=exact_text("Return to dashboard"))
+        return label.locator("xpath=ancestor::button[1]")
+
+    def _finish_canceled_run(self) -> None:
+        """Wait out Return to dashboard, dropping leftover tips when the modal appears."""
+        from automation.app_helpers.test_progress import log_step
+
+        tips = self.page.get_by_text(exact_text("Remove any attached tips"))
+        expect(tips.or_(self.dashboard_link).first).to_be_visible(timeout=60_000)
+        if not self._is_visible(tips):
+            expect(self.page).to_have_url(self.DASHBOARD_URL, timeout=60_000)
+            return
+        log_step("Tips are still attached after the canceled run")
+        self.press(self.page.get_by_role("button", name=re.compile(r"^Begin removal$", re.IGNORECASE)))
+        from automation.app_pages.odd.odd_drop_tip_wizard import OddDropTipWizard
+
+        OddDropTipWizard(self.page).drop_in_waste_chute_without_blowout()
+        expect(self.page).to_have_url(self.DASHBOARD_URL, timeout=60_000)
+
+    def _is_visible(self, locator: Locator) -> bool:
+        """True when the locator matches a visible element."""
+        return locator.count() > 0 and locator.first.is_visible()
+
     def press(self, target: Locator) -> None:
         """Activate a control with a DOM click.
 
@@ -91,6 +157,7 @@ class OddShell(AppBasePage):
 
     def _follow(self, link: Locator, url: re.Pattern[str], *, timeout: float = 15_000) -> None:
         """Click a top-nav link and wait until the hash route matches."""
+        self.dismiss_canceled_run_if_present()
         self.dismiss_welcome_modal_if_present()
         self.press(link)
         expect(self.page).to_have_url(url, timeout=timeout)
@@ -114,6 +181,7 @@ class OddShell(AppBasePage):
         The logged-out dialog covers the whole touchscreen, so nav clicks never
         land until this returns.
         """
+        self.dismiss_canceled_run_if_present()
         overlay = self.page.get_by_role("dialog", name="Logged out")
         username_input = self.page.locator('input[name="username"]')
         password_input = self.page.locator('input[name="password"]')
