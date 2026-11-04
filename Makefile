@@ -18,6 +18,7 @@ PYTEST_HEADED := $(if $(HEADED),HEADED=1,)
 	test-app-calibration test-app-calibration-headed run_abr_2_and_4 \
 	ui test-ui catalog \
 	test-odd test-odd-headed \
+	playwriting \
 	troubleshoot
 
 # Robot Settings plan: open robot detail first, then settings (one Electron session).
@@ -142,6 +143,14 @@ test-odd-headed:
 run_abr_2_and_4:
 	@$(MAKE) --no-print-directory _pytest-app \
 		TEST_PATH=tests/app/abr_orchestration/test_abr_2_and_4.py HEADED_ENV="HEADED=1"
+
+# Open the packaged app and pause in Playwright Inspector so clicks can be recorded.
+# --timeout=0: the session waits until the Inspector is resumed or closed.
+playwriting:
+	@$(MAKE) --no-print-directory _pytest-app \
+		TEST_PATH=tests/compliance/example_test.py \
+		HEADED_ENV="HEADED=1" \
+		PYTEST_ARGS="-s --timeout=0 $(PYTEST_ARGS)"
 
 troubleshoot:
 	@echo "Re-running last failures in headed mode..."

@@ -1,8 +1,8 @@
 """Interactive Playwright Inspector for recording compliance / app flows.
 
-Run (headed, keep stdin attached)::
+Run::
 
-    HEADED=1 uv run pytest tests/compliance/example_test.py -s
+    make playwriting
 
 In the Inspector: click Record, drive the Opentrons window, copy the generated steps.
 Resume / stop the Inspector when finished (the test ends after ``page.pause()`` returns).

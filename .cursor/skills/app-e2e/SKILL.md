@@ -35,6 +35,7 @@ Full paths:
 ```bash
 make setup test-setup          # once
 make configure-robot           # interactive .env (robot IP / name)
+make playwriting              # open the app and record steps in Playwright Inspector
 make test-app-headed           # packaged Opentrons.app over CDP
 make test-app-device-cards-headed
 make test-app-robot-settings-headed   # robot detail → Robot Settings (one session)
