@@ -11,12 +11,18 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from automation.app_helpers.crs_accounts import (
+    CrsReportedAccount,
+    load_saved_credentials_event,
+    save_crs_accounts,
+)
 from automation.app_helpers.test_progress import log_done, log_step, run_timed, set_event_sink
 from automation.ui_runner.collect_plugin import _validate_prerequisites
 from automation.ui_runner.event_plugin import EventWriter
 from automation.ui_runner.server import (
     DEFAULT_APP_PATH,
     ROOT,
+    EventStream,
     WorkflowCatalog,
     _upsert_env_keys,
     app,
@@ -96,6 +102,33 @@ def test_event_writer_adds_test_context_and_ndjson(tmp_path: Path) -> None:
     assert events[0]["node_id"] == "tests/test_example.py::test_workflow"
     assert events[0]["type"] == "step_start"
     assert "node_id" not in events[1]
+
+
+def test_crs_accounts_persist_until_overwrite(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "crs_accounts.json"
+    monkeypatch.setattr("automation.app_helpers.crs_accounts.CRS_ACCOUNTS_PATH", path)
+    accounts = (
+        CrsReportedAccount(role="Service", username="service", password="aaa-bbb-ccc-ddd"),
+        CrsReportedAccount(role="Admin", username="testadmin", password="testadminpassword", legal_name="test admin"),
+    )
+    save_crs_accounts(accounts, service_pin="SERIAL-0000")
+    loaded = load_saved_credentials_event()
+    assert loaded is not None
+    assert loaded["service_pin"] == "SERIAL-0000"
+    assert loaded["accounts"][0]["password"] == "aaa-bbb-ccc-ddd"
+
+    stream = EventStream()
+    assert stream.latest_credentials == loaded
+    stream._remember({"type": "session_start"})
+    assert stream.latest_credentials == loaded
+
+    replacement = {
+        "type": "credentials",
+        "service_pin": "NEW-0000",
+        "accounts": [{"role": "Service", "username": "service", "password": "zzz-yyy-xxx-www", "legal_name": ""}],
+    }
+    stream._remember(replacement)
+    assert stream.latest_credentials == replacement
 
 
 def test_event_writer_survives_a_wiped_results_directory(tmp_path: Path) -> None:

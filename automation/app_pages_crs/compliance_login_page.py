@@ -5,10 +5,16 @@
 
 from __future__ import annotations
 
+import re
+from typing import Self
+
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.crs_accounts import CrsAccount
 from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
+
+_ACCOUNT_INITIAL = re.compile(r"^[A-Z]$")
 
 
 class ComplianceLoginPage(AppBasePage):
@@ -20,6 +26,11 @@ class ComplianceLoginPage(AppBasePage):
         """Bind the page and the account whose initial is shown after login."""
         super().__init__(page)
         self.username = username
+
+    @classmethod
+    def from_account(cls, page: Page, account: CrsAccount) -> Self:
+        """Build a page object bound to ``account``'s username initial."""
+        return cls(page, username=account.username)
 
     @property
     def account_initial(self) -> str:
@@ -56,9 +67,19 @@ class ComplianceLoginPage(AppBasePage):
         """Signed-in account button, labeled with the username initial."""
         return self.page.get_by_role("button", name=exact_text(self.account_initial))
 
+    @property
+    def any_account_button(self) -> Locator:
+        """Any signed-in account button (single-letter initial)."""
+        return self.page.get_by_role("button", name=_ACCOUNT_INITIAL)
+
+    @property
+    def log_out_menu_item(self) -> Locator:
+        """Overflow menu item that signs out of the robot."""
+        return self.page.get_by_role("button", name=exact_text("Log out"))
+
     def access_control_is_on(self) -> bool:
         """True when this robot shows a Log in button or a signed-in account."""
-        chrome = self.log_in_button.or_(self.account_button)
+        chrome = self.log_in_button.or_(self.any_account_button)
         try:
             expect(chrome.first).to_be_visible(timeout=5_000)
         except AssertionError:
@@ -66,13 +87,25 @@ class ComplianceLoginPage(AppBasePage):
         return True
 
     def is_logged_in(self) -> bool:
-        """True when the account initial is shown and Log in is gone."""
+        """True when this account's initial is shown and Log in is gone."""
         log_in = self.log_in_button
         account = self.account_button
         return log_in.count() == 0 and account.count() > 0 and account.is_visible()
 
+    def ensure_logged_out(self) -> None:
+        """Log out whoever is signed in, or no-op when Log in is already showing."""
+        if self.log_in_button.count() > 0 and self.log_in_button.is_visible():
+            return
+        expect(self.any_account_button.first).to_be_visible()
+        self.any_account_button.first.click()
+        expect(self.log_out_menu_item).to_be_visible()
+        self.log_out_menu_item.click()
+        expect(self.log_in_button).to_be_visible()
+
     def log_in(self, username: str, password: str) -> None:
         """Open the login modal, submit the account, and require the account button."""
+        self.username = username
+        self.ensure_logged_out()
         self.log_in_button.click()
         expect(self.login_title).to_be_visible()
         expect(self.username_input).to_be_visible()
@@ -82,8 +115,25 @@ class ComplianceLoginPage(AppBasePage):
         self.submit_button.click()
         self.expect_logged_in()
 
+    def log_in_as(self, account: CrsAccount) -> None:
+        """Sign in as ``account`` and require that account's initial button."""
+        self.log_in(account.username, account.password)
+
+    def log_out(self) -> None:
+        """Open the account menu for this user and sign out."""
+        expect(self.account_button).to_be_visible()
+        self.account_button.click()
+        expect(self.log_out_menu_item).to_be_visible()
+        self.log_out_menu_item.click()
+        self.expect_logged_out()
+
     def expect_logged_in(self) -> None:
         """Require the login form to be gone and the account button to be visible."""
         expect(self.username_input).to_be_hidden()
         expect(self.log_in_button).to_have_count(0)
         expect(self.account_button).to_be_visible()
+
+    def expect_logged_out(self) -> None:
+        """Require the Log in button and no account button for this user."""
+        expect(self.log_in_button).to_be_visible()
+        expect(self.account_button).to_have_count(0)

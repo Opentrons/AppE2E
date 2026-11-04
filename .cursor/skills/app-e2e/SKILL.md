@@ -3,8 +3,8 @@ name: app-e2e
 description: >-
   Opentrons desktop app (Electron) Playwright E2E tests in this standalone
   workspace. Use when writing, running, or modifying tests under tests/app/,
-  page objects in automation/app_pages/, helpers in automation/app_helpers/,
-  or make test-app* targets.
+  page objects in automation/app_pages/ or automation/app_pages_crs/,
+  helpers in automation/app_helpers/, or make test-app* targets.
 ---
 
 # App E2E (Standalone Workspace)
@@ -58,7 +58,9 @@ OPENTRONS_ROOT=/Users/alexcopperman/Downloads/Opentrons_General/opentrons
 ## Layout (this workspace)
 
 - `tests/app/` — app E2E tests (`nav/`, `device_cards/`, `abr_orchestration/`)
-- `automation/app_pages/` — page objects (import from `automation.app_pages`)
+- `tests/compliance/` — Compliance Ready Software desktop flows
+- `automation/app_pages/` — general desktop / ODD page objects (`automation.app_pages`)
+- `automation/app_pages_crs/` — CRS page objects (`automation.app_pages_crs`)
 - `automation/app_helpers/` — robot connection, reporting, launch helpers
 - `automation/base_page.py` — shared `BasePage` (via `AppBasePage`)
 - `open_app.py` — launch / attach Electron over CDP
@@ -70,7 +72,7 @@ Protocol Designer / Labware Library suites are **not** in this workspace (see mo
 ## Conventions
 
 - **ALWAYS** use Page Object Model — no raw Playwright selectors in test files
-- Put selectors and UI flows in `automation/app_pages/`; shared helpers in `automation/app_helpers/`
+- Put selectors and UI flows in `automation/app_pages/` (or `automation/app_pages_crs/` for CRS); shared helpers in `automation/app_helpers/`
 - Prefer `get_by_role` / `get_by_test_id` / `get_by_text` over CSS/XPath
 - Wait with Playwright `expect` or page-object helpers — avoid `time.sleep()`
 - Type-annotate public helpers; keep tests independent (no shared mutable state)

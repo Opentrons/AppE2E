@@ -536,7 +536,6 @@ function resetRunOutput() {
   elements.results.replaceChildren();
   elements.currentTest.classList.add("hidden");
   elements.emptyProgress.classList.add("hidden");
-  clearCredentials();
   closePrompt();
   updateProgressBar();
 }
@@ -727,13 +726,6 @@ function finishRun(summary) {
   updateProgressBar();
 }
 
-function clearCredentials() {
-  elements.crsAccounts.classList.add("hidden");
-  elements.crsAccountsList.replaceChildren();
-  elements.crsServicePin.textContent = "";
-  elements.crsServicePin.classList.add("hidden");
-}
-
 function closePrompt() {
   state.activePromptId = null;
   elements.operatorPromptError.classList.add("hidden");
@@ -841,7 +833,6 @@ async function submitPrompt(event) {
 function handleEvent(event) {
   if (!event || typeof event.type !== "string") return;
   if (event.type === "session_start") {
-    clearCredentials();
     closePrompt();
     if (state.runState === "idle") setRunState("running");
     elements.emptyProgress.classList.add("hidden");
