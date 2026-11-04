@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Self
 
 from playwright.sync_api import Locator, Page, expect
@@ -13,8 +12,6 @@ from playwright.sync_api import Locator, Page, expect
 from automation.app_helpers.crs_accounts import CrsAccount
 from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
-
-_ACCOUNT_INITIAL = re.compile(r"^[A-Z]$")
 
 
 class ComplianceLoginPage(AppBasePage):
@@ -63,14 +60,19 @@ class ComplianceLoginPage(AppBasePage):
         return self.page.locator('button[type="submit"]').filter(has_text="Log in")
 
     @property
-    def account_button(self) -> Locator:
-        """Top-right signed-in account icon (username / legal-name initial)."""
-        return self.page.get_by_role("button", name=exact_text(self.account_initial))
+    def account_popover(self) -> Locator:
+        """Top-right signed-in account chrome (CSS-module class substring is stable)."""
+        return self.page.locator('[class*="account_popover_menu_container"]')
 
     @property
-    def any_account_button(self) -> Locator:
-        """Any top-right signed-in account icon (single-letter initial)."""
-        return self.page.get_by_role("button", name=_ACCOUNT_INITIAL)
+    def account_button(self) -> Locator:
+        """Top-right signed-in account icon inside the account popover."""
+        return self.account_popover.get_by_role("button", name=exact_text(self.account_initial))
+
+    @property
+    def header_account_button(self) -> Locator:
+        """Whoever is signed in — the button inside the account popover."""
+        return self.account_popover.get_by_role("button")
 
     @property
     def account_menu(self) -> Locator:
@@ -84,7 +86,7 @@ class ComplianceLoginPage(AppBasePage):
 
     def access_control_is_on(self) -> bool:
         """True when this robot shows a Log in button or a signed-in account."""
-        chrome = self.log_in_button.or_(self.any_account_button)
+        chrome = self.log_in_button.or_(self.account_popover)
         try:
             expect(chrome.first).to_be_visible(timeout=5_000)
         except AssertionError:
@@ -103,8 +105,8 @@ class ComplianceLoginPage(AppBasePage):
         """Log out whoever is signed in, or no-op when Log in is already showing."""
         if self.log_in_button.count() > 0 and self.log_in_button.is_visible():
             return
-        expect(self.any_account_button.first).to_be_visible()
-        self._log_out_from(self.any_account_button.first)
+        expect(self.header_account_button.first).to_be_visible()
+        self._log_out_from(self.header_account_button.first)
 
     def log_in(self, username: str, password: str) -> None:
         """Open the login modal, submit the account, and require the account button."""
@@ -136,11 +138,9 @@ class ComplianceLoginPage(AppBasePage):
         self._log_out_from(self.account_button)
 
     def _log_out_from(self, account_button: Locator) -> None:
-        """Open the account menu, choose Log out, wait for the icon to clear."""
+        """Open the account menu, choose Log out, wait for Log in."""
         self._open_account_menu(account_button)
         self._click_log_out()
-        # Wait for the top-right initial to go away, then for Log in.
-        account_button.wait_for(state="hidden", timeout=15_000)
         self.expect_logged_out()
 
     def _open_account_menu(self, account_button: Locator) -> None:
@@ -151,21 +151,14 @@ class ComplianceLoginPage(AppBasePage):
         expect(self.log_out_menu_item).to_be_visible(timeout=10_000)
 
     def _click_log_out(self) -> None:
-        """Click Log out by menu geometry.
+        """Activate Log out inside the open account menu via the DOM node.
 
-        Desktop ``MenuList`` is often offset from the account icon, so a locator
-        click can miss and only dismiss the menu (leaving the initial icon). Log
-        out is the second row — click the lower half of the visible menu box.
+        The desktop ``MenuList`` is often visually offset, so a pointer click can
+        miss and only dismiss the menu. Calling ``click()`` on the button node
+        runs the React handler without hit-testing.
         """
-        menu = self.account_menu
-        expect(menu).to_be_visible()
-        box = menu.bounding_box()
-        if box is None:
-            raise AssertionError("Account menu is open but has no bounding box.")
-        self.page.mouse.click(
-            box["x"] + box["width"] / 2,
-            box["y"] + box["height"] * 0.75,
-        )
+        expect(self.log_out_menu_item).to_be_visible()
+        self.log_out_menu_item.evaluate("button => button.click()")
 
     def expect_logged_in(self) -> None:
         """Require the login form to be gone and the account button to be visible."""
@@ -174,6 +167,9 @@ class ComplianceLoginPage(AppBasePage):
         expect(self.account_button).to_be_visible()
 
     def expect_logged_out(self) -> None:
-        """Require no signed-in account icon and top-right Log in visible."""
-        expect(self.any_account_button).to_have_count(0, timeout=15_000)
+        """Require the account popover gone and top-right Log in visible.
+
+        Do not match single-letter buttons page-wide — deck slots are also A–Z.
+        """
+        expect(self.account_popover).to_have_count(0, timeout=15_000)
         expect(self.log_in_button).to_be_visible(timeout=15_000)
