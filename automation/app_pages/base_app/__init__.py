@@ -1,7 +1,6 @@
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.app_settings_page import AppSettingsPage
 from automation.app_pages.base_app.choose_robot_slideout import ChooseRobotToRunProtocolSlideout
-from automation.app_pages.base_app.compliance_login_page import ComplianceLoginPage
 from automation.app_pages.base_app.deck_configuration_page import DeckConfigurationPage
 from automation.app_pages.base_app.device_cards_page import (
     FLEX_STACKER,
@@ -19,8 +18,6 @@ from automation.app_pages.base_app.device_cards_page import (
     ThermocyclerCard,
 )
 from automation.app_pages.base_app.devices_page import DevicesPage
-from automation.app_pages.base_app.documentation_required_page import AppDocumentationRequired
-from automation.app_pages.base_app.enable_crs_wizard_page import EnableCRSWizardPage
 from automation.app_pages.base_app.file_manager_page import FileManagerPage
 from automation.app_pages.base_app.labware_page import LabwarePage
 from automation.app_pages.base_app.protocol_overflow_menu import ProtocolOverflowMenu
@@ -32,14 +29,11 @@ from automation.app_pages.base_app.run_setup_page import RunSetupPage
 
 __all__ = [
     "AppBasePage",
-    "AppDocumentationRequired",
     "AppSettingsPage",
     "ChooseRobotToRunProtocolSlideout",
-    "ComplianceLoginPage",
     "DeckConfigurationPage",
     "DeviceCardsPage",
     "DevicesPage",
-    "EnableCRSWizardPage",
     "FLEX_STACKER",
     "FileManagerPage",
     "FlexStackerCard",

@@ -536,7 +536,6 @@ function resetRunOutput() {
   elements.results.replaceChildren();
   elements.currentTest.classList.add("hidden");
   elements.emptyProgress.classList.add("hidden");
-  clearCredentials();
   closePrompt();
   updateProgressBar();
 }
@@ -572,6 +571,12 @@ async function openInEditor(file, line) {
   }
 }
 
+function formatTestLabel(test, fallback = "") {
+  if (!test) return fallback;
+  if (test.section && test.label) return `${test.section}: ${test.label}`;
+  return test.label || fallback;
+}
+
 function ensureResultCard(nodeId, label = "") {
   if (!nodeId) return null;
   let card = state.resultCards.get(nodeId);
@@ -583,7 +588,7 @@ function ensureResultCard(nodeId, label = "") {
   card = fragment.querySelector(".result-card");
   card.dataset.nodeId = nodeId;
   const test = state.tests.get(nodeId);
-  card.querySelector(".result-title").textContent = label || test?.label || shortNodeId(nodeId);
+  card.querySelector(".result-title").textContent = label || formatTestLabel(test, shortNodeId(nodeId));
   elements.results.append(fragment);
   state.resultCards.set(nodeId, card);
   card.scrollIntoView({block: "nearest"});
@@ -727,13 +732,6 @@ function finishRun(summary) {
   updateProgressBar();
 }
 
-function clearCredentials() {
-  elements.crsAccounts.classList.add("hidden");
-  elements.crsAccountsList.replaceChildren();
-  elements.crsServicePin.textContent = "";
-  elements.crsServicePin.classList.add("hidden");
-}
-
 function closePrompt() {
   state.activePromptId = null;
   elements.operatorPromptError.classList.add("hidden");
@@ -841,7 +839,6 @@ async function submitPrompt(event) {
 function handleEvent(event) {
   if (!event || typeof event.type !== "string") return;
   if (event.type === "session_start") {
-    clearCredentials();
     closePrompt();
     if (state.runState === "idle") setRunState("running");
     elements.emptyProgress.classList.add("hidden");
@@ -857,7 +854,7 @@ function handleEvent(event) {
     renderCredentials(event);
   } else if (event.type === "test_start") {
     const test = state.tests.get(event.node_id);
-    const testLabel = test?.label || event.label || event.node_id;
+    const testLabel = formatTestLabel(test, event.label || event.node_id);
     state.activeNodeId = event.node_id || null;
     const card = ensureResultCard(event.node_id, testLabel);
     setResultStatus(card, "running");
@@ -873,7 +870,7 @@ function handleEvent(event) {
   } else if (event.type === "test_end") {
     const status = event.status || "completed";
     const test = state.tests.get(event.node_id);
-    const testLabel = test?.label || shortNodeId(event.node_id);
+    const testLabel = formatTestLabel(test, shortNodeId(event.node_id));
     const card = ensureResultCard(event.node_id, testLabel);
     const duration = `${numberOrZero(event.duration).toFixed(1)}s`;
     setResultStatus(card, status, duration);

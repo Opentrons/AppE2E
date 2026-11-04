@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
-from automation.app_pages import AppDocumentationRequired
+from automation.app_pages_crs import AppDocumentationRequired
 
 
 @pytest.mark.skip(reason="Fill in AppDocumentationRequired.submit_empty_note from the live desktop screen")

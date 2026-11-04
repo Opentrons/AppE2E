@@ -5,9 +5,10 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
-from automation.app_helpers.crs_accounts import CrsAccount, load_crs_account
+from automation.app_helpers.crs_accounts import CrsAccount, load_crs_account, load_crs_account_role
 from automation.app_helpers.test_progress import log_done, log_info, log_step
-from automation.app_pages import ComplianceLoginPage, DevicesPage
+from automation.app_pages import DevicesPage
+from automation.app_pages_crs import ComplianceLoginPage
 
 # Pull in run_local_app / playwright launch from tests/app/conftest.py
 pytest_plugins = ["tests.app.conftest"]
@@ -29,8 +30,26 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 @pytest.fixture
 def crs_user() -> CrsAccount:
-    """Lab account for Compliance Ready login. Defaults live in ``crs_accounts``."""
+    """Lab Admin account for Compliance Ready login. Defaults live in ``crs_accounts``."""
     return load_crs_account()
+
+
+@pytest.fixture
+def crs_service_user() -> CrsAccount:
+    """Saved Service account from the last Enable CRS run."""
+    account = load_crs_account_role("Service")
+    if account is None:
+        pytest.skip("No saved Service CRS account; run Enable CRS first")
+    return account
+
+
+@pytest.fixture
+def crs_recovery_user() -> CrsAccount:
+    """Saved Recovery account from the last Enable CRS run."""
+    account = load_crs_account_role("Recovery")
+    if account is None:
+        pytest.skip("No saved Recovery CRS account; run Enable CRS first")
+    return account
 
 
 @pytest.fixture
@@ -39,7 +58,7 @@ def crs_enabled(run_local_app: Page, robot_name: str, crs_user: CrsAccount) -> P
     log_step(f"Open Devices > {robot_name}")
     DevicesPage(run_local_app, robot_name=robot_name).navigate()
     log_done(f"On {robot_name} detail")
-    login = ComplianceLoginPage(run_local_app, username=crs_user.username)
+    login = ComplianceLoginPage.from_account(run_local_app, crs_user)
     if not login.access_control_is_on():
         pytest.skip(f"Compliance Ready is not enabled on {robot_name}")
     return run_local_app
@@ -48,7 +67,7 @@ def crs_enabled(run_local_app: Page, robot_name: str, crs_user: CrsAccount) -> P
 @pytest.fixture
 def crs_logged_in(crs_enabled: Page, robot_name: str, crs_user: CrsAccount) -> Page:
     """Sign in on the robot detail page when the account button is not showing."""
-    login = ComplianceLoginPage(crs_enabled, username=crs_user.username)
+    login = ComplianceLoginPage.from_account(crs_enabled, crs_user)
     if login.is_logged_in():
         log_info(
             f"Already logged in to {robot_name} as {crs_user.username!r} "
@@ -56,6 +75,6 @@ def crs_logged_in(crs_enabled: Page, robot_name: str, crs_user: CrsAccount) -> P
         )
         return crs_enabled
     log_step(f"Log in to {robot_name} as {crs_user.username!r}")
-    login.log_in(crs_user.username, crs_user.password)
+    login.log_in_as(crs_user)
     log_done("Logged in")
     return crs_enabled

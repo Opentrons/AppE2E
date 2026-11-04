@@ -201,11 +201,14 @@ class EventStream:
     """Tail an NDJSON file and fan events out to WebSocket subscribers."""
 
     def __init__(self) -> None:
+        from automation.app_helpers.crs_accounts import load_saved_credentials_event
+
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._watch_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
         self.pending_prompt: dict[str, Any] | None = None
-        self.latest_credentials: dict[str, Any] | None = None
+        # Keep the last Enable CRS accounts until a new credentials event overwrites them.
+        self.latest_credentials: dict[str, Any] | None = load_saved_credentials_event()
 
     def _remember(self, event: dict[str, Any]) -> None:
         event_type = event.get("type")
@@ -217,7 +220,6 @@ class EventStream:
             self.latest_credentials = event
         elif event_type == "session_start":
             self.pending_prompt = None
-            self.latest_credentials = None
 
     def _backlog(self) -> list[dict[str, Any]]:
         backlog: list[dict[str, Any]] = []
