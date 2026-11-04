@@ -2,10 +2,10 @@
 
 Group order follows the desktop suite flow in ``TEST_FLOWS_APP.md``, then
 ODD groups from ``TEST_FLOWS_ODD.md``:
-Devices → Robot Settings → Compliance Ready → App Settings → Protocols →
-Labware → Protocol run → Setup steps → Calibration → ABR →
-ODD protocols → ODD settings → ODD deck → ODD instruments →
-ODD device reset → ODD update.
+Devices → Robot Settings → Compliance Ready → Compliance Ready Testing →
+App Settings → Protocols → Labware → Protocol run → Setup steps →
+Calibration → ABR → ODD protocols → ODD settings → ODD deck →
+ODD instruments → ODD device reset → ODD update.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ WORKFLOW_GROUPS = (
     WorkflowGroup("devices", "Devices", 10),
     WorkflowGroup("robot_settings", "Robot settings", 20),
     WorkflowGroup("compliance", "Compliance Ready", 25),
+    WorkflowGroup("compliance_testing", "Compliance Ready Testing", 26),
     WorkflowGroup("app_settings", "App settings", 30),
     WorkflowGroup("protocols", "Protocol page", 40),
     WorkflowGroup("labware", "Labware", 50),

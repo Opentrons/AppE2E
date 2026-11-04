@@ -27,7 +27,7 @@ from automation.app_pages_crs import EnableCRSWizardPage
 @pytest.mark.timeout(3600)
 @pytest.mark.workflow(
     group="compliance",
-    section="Enable",
+    section="Compliance Setup",
     label="Enable CRS (permanent, resets the robot)",
     order=10,
 )

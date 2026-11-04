@@ -1,8 +1,8 @@
-"""Log in once per Compliance Ready account type.
+"""Log in / log out once per Compliance Ready account type.
 
-Each case is its own workflow section header (Service / Admin / Recovery) so
-later account-specific workflows can group under the matching section.
-Passwords come from ``artifacts/crs_accounts.json`` written by Enable CRS.
+Each account is a section under **Compliance Ready Testing** (Service / Admin /
+Recovery). Log in opens the lane; Log out closes it (order leaves room for
+workflows in between). Passwords come from ``artifacts/crs_accounts.json``.
 """
 
 from __future__ import annotations
@@ -14,11 +14,15 @@ from automation.app_helpers.crs_accounts import CrsAccount
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages_crs import ComplianceLoginPage
 
+_LOGIN_SERVICE = "tests/compliance/test_login.py::test_login_service"
+_LOGIN_ADMIN = "tests/compliance/test_login.py::test_login_admin"
+_LOGIN_RECOVERY = "tests/compliance/test_login.py::test_login_recovery"
+
 
 @pytest.mark.workflow(
-    group="compliance",
+    group="compliance_testing",
     section="Service",
-    label="Log in",
+    label="Log in as Service",
     order=20,
 )
 def test_login_service(crs_enabled: Page, crs_service_user: CrsAccount) -> None:
@@ -29,9 +33,25 @@ def test_login_service(crs_enabled: Page, crs_service_user: CrsAccount) -> None:
 
 
 @pytest.mark.workflow(
-    group="compliance",
+    group="compliance_testing",
+    section="Service",
+    label="Log out of Service",
+    order=90,
+    requires=_LOGIN_SERVICE,
+)
+def test_logout_service(crs_enabled: Page, crs_service_user: CrsAccount) -> None:
+    """Sign out of Service."""
+    login = ComplianceLoginPage.from_account(crs_enabled, crs_service_user)
+    log_step(f"Log out of Service ({crs_service_user.username!r})")
+    login.ensure_logged_in_as(crs_service_user)
+    login.log_out()
+    log_done("Log in is visible again")
+
+
+@pytest.mark.workflow(
+    group="compliance_testing",
     section="Admin",
-    label="Log in",
+    label="Log in as Admin",
     order=30,
 )
 def test_login_admin(crs_enabled: Page, crs_user: CrsAccount) -> None:
@@ -42,9 +62,25 @@ def test_login_admin(crs_enabled: Page, crs_user: CrsAccount) -> None:
 
 
 @pytest.mark.workflow(
-    group="compliance",
+    group="compliance_testing",
+    section="Admin",
+    label="Log out of Admin",
+    order=90,
+    requires=_LOGIN_ADMIN,
+)
+def test_logout_admin(crs_enabled: Page, crs_user: CrsAccount) -> None:
+    """Sign out of Admin."""
+    login = ComplianceLoginPage.from_account(crs_enabled, crs_user)
+    log_step(f"Log out of Admin ({crs_user.username!r})")
+    login.ensure_logged_in_as(crs_user)
+    login.log_out()
+    log_done("Log in is visible again")
+
+
+@pytest.mark.workflow(
+    group="compliance_testing",
     section="Recovery",
-    label="Log in",
+    label="Log in as Recovery",
     order=40,
 )
 def test_login_recovery(crs_enabled: Page, crs_recovery_user: CrsAccount) -> None:
@@ -52,3 +88,19 @@ def test_login_recovery(crs_enabled: Page, crs_recovery_user: CrsAccount) -> Non
     log_step(f"Log in as Recovery ({crs_recovery_user.username!r})")
     ComplianceLoginPage.from_account(crs_enabled, crs_recovery_user).log_in_as(crs_recovery_user)
     log_done(f"Recovery account button {crs_recovery_user.account_initial!r} is visible")
+
+
+@pytest.mark.workflow(
+    group="compliance_testing",
+    section="Recovery",
+    label="Log out of Recovery",
+    order=90,
+    requires=_LOGIN_RECOVERY,
+)
+def test_logout_recovery(crs_enabled: Page, crs_recovery_user: CrsAccount) -> None:
+    """Sign out of Recovery."""
+    login = ComplianceLoginPage.from_account(crs_enabled, crs_recovery_user)
+    log_step(f"Log out of Recovery ({crs_recovery_user.username!r})")
+    login.ensure_logged_in_as(crs_recovery_user)
+    login.log_out()
+    log_done("Log in is visible again")
