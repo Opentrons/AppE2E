@@ -150,3 +150,30 @@ def report_crs_accounts(accounts: Sequence[CrsReportedAccount], *, service_pin: 
     if service_pin:
         log_info(f"Service PIN: {service_pin}")
     emit_event(credentials_event(accounts=accounts, service_pin=service_pin))
+
+
+def report_crs_account(account: CrsReportedAccount, *, service_pin: str | None = None) -> None:
+    """Merge one account into saved CRS credentials (by role) and refresh the runner panel.
+
+    Enable CRS owns the full Service / Admin / Recovery set. Create-user adds or
+    replaces the ``User`` row without wiping the others. Keeps the existing
+    service PIN unless ``service_pin`` is passed.
+    """
+    accounts = list(load_saved_crs_accounts())
+    replaced = False
+    for index, existing in enumerate(accounts):
+        if existing.role.casefold() == account.role.casefold():
+            accounts[index] = account
+            replaced = True
+            break
+    if not replaced:
+        accounts.append(account)
+
+    event = load_saved_credentials_event()
+    pin = ""
+    if isinstance(event, dict):
+        raw_pin = event.get("service_pin") or ""
+        pin = raw_pin if isinstance(raw_pin, str) else ""
+    if service_pin is not None:
+        pin = service_pin
+    report_crs_accounts(accounts, service_pin=pin)

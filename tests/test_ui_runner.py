@@ -131,6 +131,43 @@ def test_crs_accounts_persist_until_overwrite(tmp_path: Path, monkeypatch: pytes
     assert stream.latest_credentials == replacement
 
 
+def test_report_crs_account_merges_user_without_wiping_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from automation.app_helpers.crs_accounts import report_crs_account
+
+    path = tmp_path / "crs_accounts.json"
+    monkeypatch.setattr("automation.app_helpers.crs_accounts.CRS_ACCOUNTS_PATH", path)
+    save_crs_accounts(
+        (
+            CrsReportedAccount(role="Service", username="service", password="aaa-bbb-ccc-ddd"),
+            CrsReportedAccount(
+                role="Admin", username="testadmin", password="testadminpassword", legal_name="test admin"
+            ),
+        ),
+        service_pin="SERIAL-0000",
+    )
+
+    report_crs_account(
+        CrsReportedAccount(role="User", username="userjones", password="newuser!", legal_name="user jones")
+    )
+    loaded = load_saved_credentials_event()
+    assert loaded is not None
+    assert loaded["service_pin"] == "SERIAL-0000"
+    roles = [account["role"] for account in loaded["accounts"]]
+    assert roles == ["Service", "Admin", "User"]
+    assert loaded["accounts"][2]["username"] == "userjones"
+
+    report_crs_account(
+        CrsReportedAccount(role="User", username="user2", password="other!", legal_name="user two")
+    )
+    loaded = load_saved_credentials_event()
+    assert loaded is not None
+    roles = [account["role"] for account in loaded["accounts"]]
+    assert roles == ["Service", "Admin", "User"]
+    assert loaded["accounts"][2]["username"] == "user2"
+
+
 def test_event_writer_survives_a_wiped_results_directory(tmp_path: Path) -> None:
     destination = tmp_path / "results" / "events.ndjson"
     writer = EventWriter(destination)

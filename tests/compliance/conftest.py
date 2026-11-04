@@ -53,6 +53,15 @@ def crs_recovery_user() -> CrsAccount:
 
 
 @pytest.fixture
+def crs_standard_user() -> CrsAccount:
+    """Saved User-role account from the last create-user run."""
+    account = load_crs_account_role("User")
+    if account is None:
+        pytest.skip("No saved User CRS account; run Create user first")
+    return account
+
+
+@pytest.fixture
 def crs_enabled(run_local_app: Page, robot_name: str, crs_user: CrsAccount) -> Page:
     """Open the robot detail page and skip when Compliance Ready is off."""
     log_step(f"Open Devices > {robot_name}")
