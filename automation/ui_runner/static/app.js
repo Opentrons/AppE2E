@@ -17,6 +17,7 @@ const state = {
   loading: false,
   runState: "idle",
   cancellationRequested: false,
+  activePromptId: null,
   route: "setup",
   socket: null,
   reconnectTimer: null,
@@ -48,6 +49,17 @@ const elements = {
   emptyProgress: document.querySelector("#empty-progress"),
   results: document.querySelector("#results"),
   runActiveBanner: document.querySelector("#run-active-banner"),
+  crsAccounts: document.querySelector("#crs-accounts"),
+  crsAccountsList: document.querySelector("#crs-accounts-list"),
+  crsServicePin: document.querySelector("#crs-service-pin"),
+  operatorPrompt: document.querySelector("#operator-prompt"),
+  operatorPromptForm: document.querySelector("#operator-prompt-form"),
+  operatorPromptTitle: document.querySelector("#operator-prompt-title"),
+  operatorPromptMessage: document.querySelector("#operator-prompt-message"),
+  operatorPromptLabel: document.querySelector("#operator-prompt-label"),
+  operatorPromptValue: document.querySelector("#operator-prompt-value"),
+  operatorPromptError: document.querySelector("#operator-prompt-error"),
+  operatorPromptSubmit: document.querySelector("#operator-prompt-submit"),
   runActiveText: document.querySelector("#run-active-text"),
   navSetup: document.querySelector("#nav-setup"),
   navRun: document.querySelector("#nav-run"),
@@ -524,6 +536,8 @@ function resetRunOutput() {
   elements.results.replaceChildren();
   elements.currentTest.classList.add("hidden");
   elements.emptyProgress.classList.add("hidden");
+  clearCredentials();
+  closePrompt();
   updateProgressBar();
 }
 
@@ -705,6 +719,7 @@ function numberOrZero(value) {
 }
 
 function finishRun(summary) {
+  closePrompt();
   setRunState("idle");
   elements.currentTest.classList.add("hidden");
   const counts = formatRunCounts();
@@ -712,15 +727,134 @@ function finishRun(summary) {
   updateProgressBar();
 }
 
+function clearCredentials() {
+  elements.crsAccounts.classList.add("hidden");
+  elements.crsAccountsList.replaceChildren();
+  elements.crsServicePin.textContent = "";
+  elements.crsServicePin.classList.add("hidden");
+}
+
+function closePrompt() {
+  state.activePromptId = null;
+  elements.operatorPromptError.classList.add("hidden");
+  elements.operatorPromptError.textContent = "";
+  elements.operatorPromptValue.value = "";
+  elements.operatorPromptSubmit.disabled = false;
+  if (elements.operatorPrompt.open) elements.operatorPrompt.close();
+}
+
+function showPrompt(event) {
+  state.activePromptId = event.prompt_id;
+  elements.operatorPromptTitle.textContent = event.title || "Waiting for input";
+  elements.operatorPromptMessage.textContent = event.message || "";
+  elements.operatorPromptLabel.textContent = event.title || "Value";
+  elements.operatorPromptValue.placeholder = event.placeholder || "";
+  elements.operatorPromptValue.value = "";
+  elements.operatorPromptError.classList.add("hidden");
+  elements.operatorPromptError.textContent = "";
+  if (state.route !== "run") navigate("run");
+  elements.runSummary.textContent = event.title || "Waiting for input";
+  if (!elements.operatorPrompt.open) elements.operatorPrompt.showModal();
+  elements.operatorPromptValue.focus();
+}
+
+function renderCredentials(event) {
+  const accounts = Array.isArray(event.accounts) ? event.accounts : [];
+  elements.crsAccountsList.replaceChildren();
+  if (event.service_pin) {
+    elements.crsServicePin.textContent = `Service PIN ${event.service_pin}`;
+    elements.crsServicePin.classList.remove("hidden");
+  } else {
+    elements.crsServicePin.textContent = "";
+    elements.crsServicePin.classList.add("hidden");
+  }
+  const table = document.createElement("table");
+  table.className = "crs-account-table";
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const label of ["Role", "Username", "Password", "Legal name", ""]) {
+    const cell = document.createElement("th");
+    cell.textContent = label;
+    headRow.append(cell);
+  }
+  head.append(headRow);
+  const body = document.createElement("tbody");
+  for (const account of accounts) {
+    const row = document.createElement("tr");
+    for (const key of ["role", "username", "password", "legal_name"]) {
+      const cell = document.createElement("td");
+      if (key === "username" || key === "password") {
+        const code = document.createElement("code");
+        code.textContent = account[key] || "";
+        cell.append(code);
+      } else {
+        cell.textContent = account[key] || "";
+      }
+      row.append(cell);
+    }
+    const copyCell = document.createElement("td");
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "secondary";
+    copy.textContent = "Copy password";
+    copy.addEventListener("click", () => {
+      const password = account.password || "";
+      navigator.clipboard.writeText(password).then(() => {
+        copy.textContent = "Copied";
+      }).catch(() => {
+        copy.textContent = password;
+      });
+    });
+    copyCell.append(copy);
+    row.append(copyCell);
+    body.append(row);
+  }
+  table.append(body);
+  elements.crsAccountsList.append(table);
+  elements.crsAccounts.classList.remove("hidden");
+  if (state.route !== "run") navigate("run");
+}
+
+async function submitPrompt(event) {
+  event.preventDefault();
+  const promptId = state.activePromptId;
+  const value = elements.operatorPromptValue.value.trim();
+  if (!promptId || !value) return;
+  elements.operatorPromptSubmit.disabled = true;
+  elements.operatorPromptError.classList.add("hidden");
+  try {
+    const response = await fetch("/api/prompt", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({prompt_id: promptId, value}),
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+    closePrompt();
+  } catch (error) {
+    elements.operatorPromptError.textContent = error.message || "Could not send the key.";
+    elements.operatorPromptError.classList.remove("hidden");
+  } finally {
+    elements.operatorPromptSubmit.disabled = false;
+  }
+}
+
 function handleEvent(event) {
   if (!event || typeof event.type !== "string") return;
   if (event.type === "session_start") {
+    clearCredentials();
+    closePrompt();
     if (state.runState === "idle") setRunState("running");
     elements.emptyProgress.classList.add("hidden");
     if (!state.runTotal) {
       state.runTotal = state.effectiveSelection.size;
       updateProgressBar();
     }
+  } else if (event.type === "prompt") {
+    showPrompt(event);
+  } else if (event.type === "prompt_clear") {
+    if (!event.prompt_id || event.prompt_id === state.activePromptId) closePrompt();
+  } else if (event.type === "credentials") {
+    renderCredentials(event);
   } else if (event.type === "test_start") {
     const test = state.tests.get(event.node_id);
     const testLabel = test?.label || event.label || event.node_id;
@@ -808,6 +942,9 @@ function connectEvents() {
   });
 }
 
+elements.operatorPromptForm.addEventListener("submit", (event) => {
+  void submitPrompt(event);
+});
 elements.run.addEventListener("click", startRun);
 elements.cancel.addEventListener("click", cancelRun);
 elements.refresh.addEventListener("click", () => loadCatalog(true));

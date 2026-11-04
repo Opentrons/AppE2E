@@ -74,6 +74,11 @@ def _emit(event: dict[str, object]) -> None:
         _event_sink(event)
 
 
+def emit_event(event: dict[str, object]) -> None:
+    """Forward a structured event to the workflow runner, when one is attached."""
+    _emit(event)
+
+
 def _current_record() -> TestTiming | None:
     if _current_test is None:
         return None

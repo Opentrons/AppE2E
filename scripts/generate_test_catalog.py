@@ -14,13 +14,12 @@ import re
 import tempfile
 from pathlib import Path
 
+from automation.ui_runner.workflows import CATALOG_PATHS, catalog_pytest_args
+
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_HTML = ROOT / "test_catalog.html"
 RUNBOOK = ROOT / "testing_workflows.md"
 MANIFEST_PLUGIN = "automation.ui_runner.collect_plugin"
-
-# Keep in sync with automation.ui_runner.workflows.CATALOG_PATHS.
-CATALOG_PATHS = ("tests/app", "tests/odd")
 
 TOOLING_ROWS = [
     {
@@ -30,10 +29,7 @@ TOOLING_ROWS = [
         "label": "Flex system update / downgrade (USB or network)",
         "group": "smoke_update",
         "section": "Update / Downgrade",
-        "doc": (
-            "Apply one or more ot3-system zips; waits for health between consecutive "
-            "update→downgrade→upgrade."
-        ),
+        "doc": ("Apply one or more ot3-system zips; waits for health between consecutive update→downgrade→upgrade."),
         "cases": [
             {"id": "T70405", "name": "Update via USB"},
             {"id": "T70403", "name": "Update with Zip"},
@@ -195,7 +191,7 @@ def _collect_workflow_manifest() -> list[dict]:
         sys.executable,
         "-m",
         "pytest",
-        *CATALOG_PATHS,
+        *catalog_pytest_args(),
         "--collect-only",
         "-q",
         "-p",
@@ -207,8 +203,7 @@ def _collect_workflow_manifest() -> list[dict]:
     completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
     if completed.returncode not in (0, 5) or not destination.exists():
         raise RuntimeError(
-            f"pytest catalog collection failed ({completed.returncode}):\n"
-            f"{completed.stdout}\n{completed.stderr}"
+            f"pytest catalog collection failed ({completed.returncode}):\n{completed.stdout}\n{completed.stderr}"
         )
     try:
         payload = json.loads(destination.read_text(encoding="utf-8"))
@@ -224,8 +219,7 @@ def _rows_from_manifest(manifest: list[dict], runbook: str) -> list[dict]:
         file_part, _, test_part = node_id.partition("::")
         path = ROOT / file_part
         cases = [
-            {"id": case["id"], "name": case.get("title") or case.get("name") or ""}
-            for case in entry.get("cases") or []
+            {"id": case["id"], "name": case.get("title") or case.get("name") or ""} for case in entry.get("cases") or []
         ]
         ids = [case["id"] for case in cases]
         params: list[str] = []
