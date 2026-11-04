@@ -20,6 +20,7 @@ from automation.app_pages.base_app.device_cards_page import (
 )
 from automation.app_pages.base_app.devices_page import DevicesPage
 from automation.app_pages.base_app.documentation_required_page import AppDocumentationRequired
+from automation.app_pages.base_app.enable_crs_wizard_page import EnableCRSWizardPage
 from automation.app_pages.base_app.file_manager_page import FileManagerPage
 from automation.app_pages.base_app.labware_page import LabwarePage
 from automation.app_pages.base_app.protocol_overflow_menu import ProtocolOverflowMenu
@@ -38,6 +39,7 @@ __all__ = [
     "DeckConfigurationPage",
     "DeviceCardsPage",
     "DevicesPage",
+    "EnableCRSWizardPage",
     "FLEX_STACKER",
     "FileManagerPage",
     "FlexStackerCard",

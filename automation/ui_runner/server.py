@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import signal
 import sys
 import tempfile
@@ -21,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from automation.app_helpers.reporting import results_day_dir
 from automation.app_helpers.robot_connection import DEFAULT_ROBOT_IP
-from automation.ui_runner.workflows import CATALOG_PATHS
+from automation.ui_runner.workflows import catalog_pytest_args
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC_DIR = Path(__file__).with_name("static")
@@ -153,7 +154,7 @@ class WorkflowCatalog:
                 sys.executable,
                 "-m",
                 "pytest",
-                *CATALOG_PATHS,
+                *catalog_pytest_args(),
                 "--collect-only",
                 "-q",
                 "-p",
@@ -202,15 +203,45 @@ class EventStream:
     def __init__(self) -> None:
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._watch_task: asyncio.Task[None] | None = None
+        self._lock = asyncio.Lock()
+        self.pending_prompt: dict[str, Any] | None = None
+        self.latest_credentials: dict[str, Any] | None = None
+
+    def _remember(self, event: dict[str, Any]) -> None:
+        event_type = event.get("type")
+        if event_type == "prompt":
+            self.pending_prompt = event
+        elif event_type in {"prompt_clear", "runner_end", "run_cancelled"}:
+            self.pending_prompt = None
+        elif event_type == "credentials":
+            self.latest_credentials = event
+        elif event_type == "session_start":
+            self.pending_prompt = None
+            self.latest_credentials = None
+
+    def _backlog(self) -> list[dict[str, Any]]:
+        backlog: list[dict[str, Any]] = []
+        if self.latest_credentials is not None:
+            backlog.append(self.latest_credentials)
+        if self.pending_prompt is not None:
+            backlog.append(self.pending_prompt)
+        return backlog
 
     async def publish(self, event: dict[str, Any]) -> None:
-        for queue in tuple(self._subscribers):
+        async with self._lock:
+            self._remember(event)
+            subscribers = tuple(self._subscribers)
+        for queue in subscribers:
             await queue.put(event)
 
     async def subscribe(self) -> AsyncIterator[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        self._subscribers.add(queue)
+        async with self._lock:
+            backlog = self._backlog()
+            self._subscribers.add(queue)
         try:
+            for event in backlog:
+                yield event
             while True:
                 yield await queue.get()
         finally:
@@ -256,6 +287,7 @@ class PytestRunner:
         self._completion_task: asyncio.Task[None] | None = None
         self._cancelled = False
         self.run_id: str | None = None
+        self.prompt_dir: Path | None = None
 
     @property
     def running(self) -> bool:
@@ -284,6 +316,8 @@ class PytestRunner:
             if not robot_ip:
                 raise ValueError("Robot IP is required.")
 
+            self.prompt_dir = day_dir / f"ui-prompts-{self.run_id}"
+            self.prompt_dir.mkdir(parents=True, exist_ok=True)
             environment = os.environ.copy()
             environment["SKIP_FLEX_SETUP_PROMPT"] = "1"
             # UI suite: record failure, emit video path, continue to the next test (no page.pause).
@@ -292,6 +326,7 @@ class PytestRunner:
             environment["PROTOCOL_NAME"] = protocol_name
             environment["ROBOT_IP"] = robot_ip
             environment["OPENTRONS_APP_PATH"] = app_path
+            environment["E2E_PROMPT_DIR"] = str(self.prompt_dir)
             if request.headed:
                 environment["HEADED"] = "1"
             else:
@@ -360,6 +395,7 @@ class PytestRunner:
             if self.process is process:
                 self.process = None
                 self.run_id = None
+                self.prompt_dir = None
 
     async def cancel(self) -> bool:
         completion_task: asyncio.Task[None] | None
@@ -464,6 +500,33 @@ async def start_run(request: RunRequest) -> dict[str, Any]:
 @app.post("/api/cancel")
 async def cancel_run() -> dict[str, bool]:
     return {"cancelled": await runner.cancel()}
+
+
+_PROMPT_ID = re.compile(r"^[A-Za-z0-9]{8,64}$")
+
+
+class PromptSubmission(BaseModel):
+    prompt_id: str = Field(min_length=8, max_length=64)
+    value: str = Field(min_length=1)
+
+
+@app.post("/api/prompt")
+async def submit_prompt(body: PromptSubmission) -> dict[str, str]:
+    """Store the operator's answer where the running test is polling for it."""
+    if _PROMPT_ID.fullmatch(body.prompt_id) is None:
+        raise HTTPException(status_code=400, detail="Unrecognized prompt.")
+    value = body.value.strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="Enter the encryption key shown on the robot.")
+    directory = runner.prompt_dir
+    if directory is None:
+        raise HTTPException(status_code=409, detail="No test is waiting for input.")
+    target = directory / f"{body.prompt_id}.json"
+    temporary = target.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps({"value": value}), encoding="utf-8")
+    temporary.replace(target)
+    await event_stream.publish({"type": "prompt_clear", "prompt_id": body.prompt_id})
+    return {"status": "accepted"}
 
 
 @app.websocket("/ws/events")

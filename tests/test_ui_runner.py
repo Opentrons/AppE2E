@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -227,6 +228,69 @@ def test_run_api_requires_robot_and_protocol_names() -> None:
     assert response.status_code == 422
 
 
+def test_prompt_api_writes_the_answer_and_clears_the_prompt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from automation.ui_runner.server import event_stream, runner
+
+    prompt_dir = tmp_path / "prompts"
+    prompt_dir.mkdir()
+    monkeypatch.setattr(runner, "prompt_dir", prompt_dir)
+    event_stream.pending_prompt = {"type": "prompt", "prompt_id": "a" * 32, "title": "Robot encryption key"}
+    client = TestClient(app)
+    try:
+        response = client.post("/api/prompt", json={"prompt_id": "a" * 32, "value": " bouquet-nuclear-figurine "})
+        assert response.status_code == 200
+        assert response.json() == {"status": "accepted"}
+        saved = json.loads((prompt_dir / f"{'a' * 32}.json").read_text(encoding="utf-8"))
+        assert saved == {"value": "bouquet-nuclear-figurine"}
+        assert event_stream.pending_prompt is None
+    finally:
+        monkeypatch.undo()
+        event_stream.pending_prompt = None
+
+
+def test_prompt_api_rejects_a_missing_run_and_a_bad_id() -> None:
+    from automation.ui_runner.server import runner
+
+    client = TestClient(app)
+    assert runner.prompt_dir is None
+    missing = client.post("/api/prompt", json={"prompt_id": "a" * 32, "value": "word-word-word"})
+    assert missing.status_code == 409
+    bad_id = client.post("/api/prompt", json={"prompt_id": "../secret", "value": "word-word-word"})
+    assert bad_id.status_code == 400
+
+
+def test_request_text_reads_the_runner_answer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    from automation.app_helpers.test_progress import set_event_sink
+    from automation.app_helpers.ui_prompt import request_text
+
+    monkeypatch.setenv("E2E_PROMPT_DIR", str(tmp_path))
+    events: list[dict[str, object]] = []
+    set_event_sink(events.append)
+
+    def answer() -> None:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not events:
+            time.sleep(0.02)
+        prompt_id = str(events[0]["prompt_id"])
+        (tmp_path / f"{prompt_id}.json").write_text(
+            json.dumps({"value": "bouquet-nuclear-figurine"}),
+            encoding="utf-8",
+        )
+
+    threading.Thread(target=answer, daemon=True).start()
+    try:
+        assert request_text(title="Robot encryption key", message="Type the key on the robot.", timeout_s=5) == (
+            "bouquet-nuclear-figurine"
+        )
+    finally:
+        set_event_sink(None)
+
+    assert events[0]["type"] == "prompt"
+    assert events[0]["title"] == "Robot encryption key"
+
+
 def test_spa_routes_serve_index() -> None:
     client = TestClient(app)
     for path in ("/", "/run"):
@@ -237,3 +301,5 @@ def test_spa_routes_serve_index() -> None:
         assert 'data-nav="setup"' in response.text
         assert 'data-nav="run"' in response.text
         assert 'id="app-path"' in response.text
+        assert 'id="operator-prompt"' in response.text
+        assert 'id="crs-accounts"' in response.text

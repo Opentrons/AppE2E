@@ -132,6 +132,14 @@
           <p id="progress-label" class="progress-label">0 / 0</p>
         </div>
         <div id="current-test" class="current-test hidden"></div>
+        <section id="crs-accounts" class="crs-accounts hidden" aria-live="polite">
+          <div class="crs-accounts-head">
+            <h3>Compliance Ready accounts</h3>
+            <p>Copy these before you leave. Service and recovery passwords are generated once during setup.</p>
+          </div>
+          <p id="crs-service-pin" class="crs-service-pin hidden"></p>
+          <div id="crs-accounts-list"></div>
+        </section>
         <div id="empty-progress" class="empty-state">
           <strong>No run in progress</strong>
           <span>Select tests, then Run. Progress fills the bar; finished tests show video and stack trace.</span>
@@ -151,6 +159,20 @@
         <pre class="result-failure hidden"></pre>
       </li>
     </template>
+    <dialog id="operator-prompt">
+      <form id="operator-prompt-form">
+        <h2 id="operator-prompt-title">Waiting for input</h2>
+        <p id="operator-prompt-message"></p>
+        <label>
+          <span id="operator-prompt-label">Value</span>
+          <input id="operator-prompt-value" type="text" autocomplete="off" spellcheck="false" required />
+        </label>
+        <p id="operator-prompt-error" class="prompt-error hidden" role="alert"></p>
+        <div class="prompt-actions">
+          <button id="operator-prompt-submit" type="submit">Continue</button>
+        </div>
+      </form>
+    </dialog>
     <script src="/static/app.js" defer></script>
   </body>
 </html>

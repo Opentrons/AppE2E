@@ -3,6 +3,12 @@ test-results/
 playwright-report/
 artifacts/
 
+# File Manager downloads saved or unzipped inside the repo
+# (QA1Potato-run-records.zip, QA1Potato-run-records (1)/, robot logs, calibration JSON)
+*-run-records*
+*_logs.zip
+*-calibration.json
+
 # Python cache
 __pycache__/
 *.pyc
