@@ -3,8 +3,18 @@ const ROUTES = {
   run: "/run",
 };
 
+const DEFAULT_TABS = [
+  {id: "app", label: "APP"},
+  {id: "app_crs", label: "APP CRS"},
+  {id: "odd", label: "ODD"},
+  {id: "odd_crs", label: "ODD CRS"},
+];
+
 const state = {
   tests: new Map(),
+  groups: [],
+  tabs: DEFAULT_TABS,
+  activeTab: "app",
   explicitSelection: new Set(),
   effectiveSelection: new Set(),
   requiredSelection: new Set(),
@@ -26,10 +36,11 @@ const state = {
 
 const elements = {
   catalog: document.querySelector("#catalog"),
+  catalogTabs: document.querySelector("#catalog-tabs"),
   catalogMessage: document.querySelector("#catalog-message"),
   selectionSummary: document.querySelector("#selection-summary"),
-  selectAllApp: document.querySelector("#select-all-app"),
-  selectAllOdd: document.querySelector("#select-all-odd"),
+  selectAllTab: document.querySelector("#select-all-tab"),
+  selectAllTabLabel: document.querySelector("#select-all-tab-label"),
   runSummary: document.querySelector("#run-summary"),
   run: document.querySelector("#run"),
   cancel: document.querySelector("#cancel"),
@@ -182,9 +193,28 @@ function isCalibration(test) {
   return test.node_id.includes("/calibration/");
 }
 
-function nodeIdsForSuite(suite) {
-  const prefix = suite === "odd" ? "tests/odd/" : "tests/app/";
-  return [...state.tests.keys()].filter((nodeId) => nodeId.startsWith(prefix));
+function testTab(test) {
+  if (test?.tab) return test.tab;
+  const group = state.groups.find((entry) => entry.id === test?.group);
+  return group?.tab || "app";
+}
+
+function nodeIdsForTab(tabId = state.activeTab) {
+  return [...state.tests.values()]
+    .filter((test) => testTab(test) === tabId)
+    .map((test) => test.node_id);
+}
+
+function activeTabLabel() {
+  return state.tabs.find((tab) => tab.id === state.activeTab)?.label || "this tab";
+}
+
+function setActiveTab(tabId) {
+  if (!state.tabs.some((tab) => tab.id === tabId)) return;
+  state.activeTab = tabId;
+  renderCatalogTabs();
+  renderCatalogBody();
+  reconcileSelection();
 }
 
 function prerequisiteChainIsAvailable(nodeId, visiting = new Set()) {
@@ -284,13 +314,18 @@ function updateControls() {
   document.querySelectorAll("[data-section-toggle]").forEach((toggle) => {
     setToggleState(toggle, JSON.parse(toggle.dataset.nodeIds));
   });
-  setToggleState(elements.selectAllApp, nodeIdsForSuite("app"));
-  setToggleState(elements.selectAllOdd, nodeIdsForSuite("odd"));
+  setToggleState(elements.selectAllTab, nodeIdsForTab());
+  if (elements.selectAllTabLabel) {
+    elements.selectAllTabLabel.textContent = `Select all on ${activeTabLabel()}`;
+  }
+  updateCatalogTabBadges();
 
   const selectedCount = state.effectiveSelection.size;
   const requiredCount = state.requiredSelection.size;
+  const tabSelected = nodeIdsForTab().filter((nodeId) => state.effectiveSelection.has(nodeId)).length;
   elements.selectionSummary.textContent =
     `${plural(selectedCount, "test")} selected` +
+    (selectedCount ? ` · ${tabSelected} on ${activeTabLabel()}` : "") +
     (requiredCount ? ` · ${plural(requiredCount, "prerequisite")} locked` : "");
   elements.run.disabled =
     state.runState !== "idle" || selectedCount === 0 || state.loading || !targetsFilled();
@@ -313,6 +348,23 @@ function applyBulkSelection(nodeIds, checked) {
     else state.explicitSelection.delete(nodeId);
   }
   reconcileSelection();
+}
+
+function makeCaret(body, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "workflow-caret";
+  button.setAttribute("aria-expanded", "false");
+  button.setAttribute("aria-label", `Expand ${label}`);
+  button.textContent = "▸";
+  button.addEventListener("click", () => {
+    const open = body.hidden;
+    body.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    button.setAttribute("aria-label", open ? `Collapse ${label}` : `Expand ${label}`);
+    button.textContent = open ? "▾" : "▸";
+  });
+  return button;
 }
 
 function makeToggle(attribute, value, nodeIds, label) {
@@ -387,27 +439,84 @@ function makeTestRow(test) {
   return row;
 }
 
-function renderCatalog(payload) {
-  if (!payload || !Array.isArray(payload.groups) || !Array.isArray(payload.tests)) {
-    throw new Error("Catalog response is missing groups or tests.");
+function updateCatalogTabBadges() {
+  if (!elements.catalogTabs) return;
+  for (const button of elements.catalogTabs.querySelectorAll(".catalog-tab")) {
+    const tabId = button.dataset.tab;
+    button.setAttribute("aria-selected", tabId === state.activeTab ? "true" : "false");
+    const selectedOnTab = nodeIdsForTab(tabId).filter((nodeId) =>
+      state.effectiveSelection.has(nodeId),
+    ).length;
+    let badge = button.querySelector(".catalog-tab-badge");
+    if (!selectedOnTab) {
+      badge?.remove();
+      continue;
+    }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "catalog-tab-badge";
+      button.append(badge);
+    }
+    badge.textContent = String(selectedOnTab);
   }
+}
 
-  state.tests = new Map(payload.tests.map((test) => [test.node_id, test]));
-  state.rowInputs.clear();
-  state.explicitSelection = new Set(
-    [...state.explicitSelection].filter((nodeId) => state.tests.has(nodeId)),
+function renderCatalogTabs() {
+  if (!elements.catalogTabs) return;
+  const existing = [...elements.catalogTabs.querySelectorAll(".catalog-tab")].map(
+    (button) => button.dataset.tab,
   );
-  elements.catalog.replaceChildren();
+  const desired = state.tabs.map((tab) => tab.id);
+  const sameStructure =
+    existing.length === desired.length && existing.every((id, index) => id === desired[index]);
+  if (sameStructure) {
+    updateCatalogTabBadges();
+    return;
+  }
+  elements.catalogTabs.replaceChildren();
+  for (const tab of state.tabs) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "catalog-tab";
+    button.role = "tab";
+    button.id = `catalog-tab-${tab.id}`;
+    button.dataset.tab = tab.id;
+    button.setAttribute("aria-controls", "catalog");
+    const label = document.createElement("span");
+    label.textContent = tab.label;
+    button.append(label);
+    button.addEventListener("click", () => setActiveTab(tab.id));
+    elements.catalogTabs.append(button);
+  }
+  updateCatalogTabBadges();
+}
 
-  const orderedGroups = [...payload.groups].sort((left, right) => left.order - right.order);
+function renderCatalogBody() {
+  elements.catalog.replaceChildren();
+  state.rowInputs.clear();
+
+  const tabTests = [...state.tests.values()].filter((test) => testTab(test) === state.activeTab);
+  const groupIdsOnTab = new Set(tabTests.map((test) => test.group));
+  const orderedGroups = [...state.groups]
+    .filter((group) => groupIdsOnTab.has(group.id))
+    .sort((left, right) => left.order - right.order);
+
+  let rendered = 0;
   for (const group of orderedGroups) {
-    const tests = payload.tests.filter((test) => test.group === group.id);
+    const tests = tabTests.filter((test) => test.group === group.id);
     if (!tests.length) continue;
+    rendered += tests.length;
 
     const article = document.createElement("article");
     article.className = "workflow";
     const groupHeader = document.createElement("div");
     groupHeader.className = "workflow-header";
+    const body = document.createElement("div");
+    body.className = "workflow-body";
+    if (group.collapsible) {
+      body.hidden = true;
+      groupHeader.prepend(makeCaret(body, group.label));
+    }
     groupHeader.append(makeToggle("groupToggle", group.id, tests.map((test) => test.node_id), group.label));
     const count = document.createElement("small");
     count.textContent = plural(tests.length, "test");
@@ -434,17 +543,42 @@ function renderCatalog(payload) {
       );
       section.append(sectionHeader);
       for (const test of sectionTests) section.append(makeTestRow(test));
-      article.append(section);
+      body.append(section);
     }
+    article.append(body);
     elements.catalog.append(article);
   }
 
   if (!state.tests.size) {
     showCatalogMessage("No workflow tests were found.", "neutral");
+  } else if (!rendered) {
+    showCatalogMessage(`No ${activeTabLabel()} tests in the catalog yet.`, "neutral");
   } else {
     hideCatalogMessage();
   }
   elements.catalog.setAttribute("aria-busy", "false");
+}
+
+function renderCatalog(payload) {
+  if (!payload || !Array.isArray(payload.groups) || !Array.isArray(payload.tests)) {
+    throw new Error("Catalog response is missing groups or tests.");
+  }
+
+  state.tabs = Array.isArray(payload.tabs) && payload.tabs.length ? payload.tabs : DEFAULT_TABS;
+  if (!state.tabs.some((tab) => tab.id === state.activeTab)) {
+    state.activeTab = state.tabs[0]?.id || "app";
+  }
+  state.groups = payload.groups.map((group) => ({
+    ...group,
+    tab: group.tab || "app",
+  }));
+  state.tests = new Map(payload.tests.map((test) => [test.node_id, test]));
+  state.explicitSelection = new Set(
+    [...state.explicitSelection].filter((nodeId) => state.tests.has(nodeId)),
+  );
+
+  renderCatalogTabs();
+  renderCatalogBody();
   reconcileSelection();
 }
 
@@ -872,8 +1006,15 @@ function handleEvent(event) {
     const test = state.tests.get(event.node_id);
     const testLabel = formatTestLabel(test, shortNodeId(event.node_id));
     const card = ensureResultCard(event.node_id, testLabel);
-    const duration = `${numberOrZero(event.duration).toFixed(1)}s`;
-    setResultStatus(card, status, duration);
+    const durationSec = numberOrZero(event.duration);
+    const duration = `${durationSec.toFixed(1)}s`;
+    const slow = Boolean(event.slow) || durationSec > 300;
+    setResultStatus(card, status, slow ? `${duration} · slow (>300s)` : duration);
+    if (slow) {
+      card.dataset.slow = "true";
+    } else {
+      delete card.dataset.slow;
+    }
     renderResultMedia(event.node_id, event.artifacts || {}, event.failure || "");
     if (status === "passed" || status === "failed" || status === "skipped") {
       state.runCounts[status] += 1;
@@ -945,11 +1086,8 @@ elements.operatorPromptForm.addEventListener("submit", (event) => {
 elements.run.addEventListener("click", startRun);
 elements.cancel.addEventListener("click", cancelRun);
 elements.refresh.addEventListener("click", () => loadCatalog(true));
-elements.selectAllApp.addEventListener("change", () => {
-  applyBulkSelection(nodeIdsForSuite("app"), elements.selectAllApp.checked);
-});
-elements.selectAllOdd.addEventListener("change", () => {
-  applyBulkSelection(nodeIdsForSuite("odd"), elements.selectAllOdd.checked);
+elements.selectAllTab.addEventListener("change", () => {
+  applyBulkSelection(nodeIdsForTab(), elements.selectAllTab.checked);
 });
 elements.flexReady.addEventListener("change", reconcileSelection);
 elements.robotName.addEventListener("input", updateControls);

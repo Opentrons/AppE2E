@@ -34,9 +34,28 @@ class ChooseRobotToRunProtocolSlideout(AppBasePage):
         """Locator for a robot option labeled with ``robot_name``."""
         return self.page.get_by_text(exact_text(robot_name)).first
 
+    def search_robots_input(self) -> Locator:
+        """Slideout ``Search robots`` filter field."""
+        return self.page.get_by_placeholder(re.compile(r"search robots", re.IGNORECASE))
+
     def select_robot(self, robot_name: str) -> None:
-        """Scroll to and select the robot in the slideout list."""
-        option = scroll_until_visible(self.page, self.robot_option(robot_name))
+        """Filter the slideout list, then select the robot.
+
+        End-key scrolling targets the page behind the slideout, so search is the
+        reliable way to reach robots below the first viewport. Robots with a
+        current run are hidden when the slideout is idle-only.
+        """
+        search = self.search_robots_input()
+        if search.count() > 0 and search.first.is_visible():
+            search.first.fill(robot_name)
+        option = scroll_until_visible(
+            self.page,
+            self.robot_option(robot_name),
+            not_found_message=(
+                f"Robot {robot_name!r} not found in Choose robot slideout "
+                "(busy robots with a current run are hidden)."
+            ),
+        )
         expect(option).to_be_visible()
         option.click()
 

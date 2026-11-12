@@ -12,6 +12,9 @@ from typing import TypeVar
 
 T = TypeVar("T")
 
+# Soft threshold: pytest hard timeout is 500s; flag anything over this as slow.
+SLOW_TEST_THRESHOLD_S = 300.0
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _step_started_at: float | None = None
 _timed_call_depth = 0
@@ -277,9 +280,16 @@ def print_timing_table(*, title: str = "TIMING SUMMARY") -> None:
         if wall is not None:
             suite_total += wall
 
+        slow_note = ""
+        if wall is not None and wall > SLOW_TEST_THRESHOLD_S:
+            slow_note = f", SLOW >{SLOW_TEST_THRESHOLD_S:.0f}s"
+
         if not test.steps:
+            step_label = "(no timed steps)" + (
+                f" [SLOW >{SLOW_TEST_THRESHOLD_S:.0f}s]" if slow_note else ""
+            )
             safe_print(
-                f"{test.name:<{test_width}}  {'(no timed steps)':<{step_width}}  "
+                f"{test.name:<{test_width}}  {step_label:<{step_width}}  "
                 f"{format_elapsed(wall or 0.0):>{dur_width}}"
             )
         else:
@@ -291,7 +301,7 @@ def print_timing_table(*, title: str = "TIMING SUMMARY") -> None:
                 safe_print(
                     f"{test_col:<{test_width}}  {label:<{step_width}}  {format_elapsed(step.seconds):>{dur_width}}"
                 )
-            wall_label = f"TOTAL (wall, {status})"
+            wall_label = f"TOTAL (wall, {status}{slow_note})"
             safe_print(f"{'':<{test_width}}  {wall_label:<{step_width}}  {format_elapsed(wall or 0.0):>{dur_width}}")
         safe_print(rule)
 

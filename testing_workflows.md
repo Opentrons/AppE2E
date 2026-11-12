@@ -371,9 +371,10 @@ Parametrized `test_run_setup_step` — one case per step:
 3. Labware Offsets  
 4. Labware & Liquids  
 5. Camera  
+6. Cancel protocol after Camera (`test_cancel_run_after_setup`) — required before calibration
 
 ```bash
-make test-app-nav-headed PYTEST_ARGS="-k test_run_setup_step"
+make test-app-nav-headed PYTEST_ARGS="-k 'test_run_setup_step or test_cancel_run_after_setup'"
 ```
 
 ### Run full nav suite

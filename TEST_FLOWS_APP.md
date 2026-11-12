@@ -228,10 +228,11 @@ flowchart LR
   runPage --> tabs["Click each tab that exists: Setup, Parameters, Module Controls, Run Log, Camera"]
   tabs --> header["Read the status chip and the run timer. Any text is accepted"]
   header --> steps["For each of Instruments, Deck Hardware, Labware Offsets, Labware and Liquids, and Camera: expand the step and log its status chip"]
-  steps --> stop["Stop. Setup is not completed and Start run is not clicked"]
+  steps --> cancel["Cancel run (Yes, cancel run) so calibration is not blocked"]
+  cancel --> stop["Stop. Setup is not completed and Start run is not clicked"]
 ```
 
-In words: Start setup, pick the robot, and confirm parameters when the protocol has them, including a CSV when one is configured. The run page tabs are clicked. Status and timer are read and any text is accepted. Each Setup step is expanded and its status is logged. The run is not started. If a run is already open, the Setup tests reuse it.
+In words: Start setup, pick the robot, and confirm parameters when the protocol has them, including a CSV when one is configured. The run page tabs are clicked. Status and timer are read and any text is accepted. Each Setup step is expanded and its status is logged. After Camera, cancel the protocol run so Calibrate pipette/module and deck edits stay enabled. The run is not started. If a run is already open, the Setup tests reuse it until that cancel step.
 
 ## Calibration wizards
 
@@ -243,7 +244,7 @@ flowchart LR
   list --> need{"Anything uncalibrated?"}
   need -->|yes| menus["Open the overflow menu on each uncalibrated item"]
   need -->|no| skipMenus["Skip the overflow test"]
-  page --> p96["96-channel: overflow, move gantry to front, attach probe, begin, wait for motion, complete, success screen, exit"]
+  page --> p96["96-channel: overflow, move gantry to front, attach probe Continue, select B2/C2 unless waste chute forces B2, wait for motion, complete, success screen, exit"]
   page --> deck{"Device-details tabs exist?"}
   deck -->|no| skipDeck["Skip deck check and the three module wizards cannot be required"]
   deck -->|yes| labels["Read deck labels"]
@@ -266,7 +267,7 @@ flowchart LR
   probe --> done["Complete calibration after the probe is removed, success screen, Finish"]
 ```
 
-In words: Calibration lists pipette, gripper, and module status, and opens overflow menus only for items that are not calibrated. The 96-channel wizard runs from overflow through probe attach, motion, complete, and exit. Module wizards first require Temperature, Heater-Shaker, and Thermocycler on the deck: an empty deck is filled, a deck that is already filled but missing one of those three fails. Heater-Shaker, Temperature Module, and Thermocycler then share one wizard: firmware if offered, start setup, confirm location, wait through motion, confirm placement, wait through motion, begin with the probe attached, wait for probing, complete after the probe is removed, and finish on the success screen.
+In words: Calibration lists pipette, gripper, and module status, and opens overflow menus only for items that are not calibrated. The 96-channel wizard runs from overflow through probe attach, optional B2/C2 slot selection (skipped when a waste chute forces B2), motion, complete, and exit. Module wizards first require Temperature, Heater-Shaker, and Thermocycler on the deck: an empty deck is filled, a deck that is already filled but missing one of those three fails. Heater-Shaker, Temperature Module, and Thermocycler then share one wizard: firmware if offered, start setup, confirm location, wait through motion, confirm placement, wait through motion, begin with the probe attached, wait for probing, complete after the probe is removed, and finish on the success screen.
 
 ## ABR start-run
 

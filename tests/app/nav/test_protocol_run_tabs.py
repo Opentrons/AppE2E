@@ -12,6 +12,7 @@ from automation.app_pages import (
     ProtocolRunPage,
     ProtocolsPage,
 )
+from tests.app.nav.test_run_setup import _open_existing_run_if_present
 
 # Home gantry is disabled once a protocol run is loaded on the robot.
 HOME_GANTRY_REQUIRED = "tests/app/device_cards/test_robot_settings.py::test_home_gantry_from_overview_overflow"
@@ -32,17 +33,21 @@ PROTOCOL_RUN_TABS = "tests/app/nav/test_protocol_run_tabs.py::test_protocol_run_
 def test_protocol_run_tabs(run_local_app: Page, protocol_name: str, robot_name: str) -> None:
     """Create a run, then click each present run-page tab."""
     page = run_local_app
-    target = ProtocolRunTarget(protocol_name=protocol_name, robot_name=robot_name)
+    run_page = ProtocolRunPage(page, robot_name=robot_name)
 
-    log_step(f"Start setup for '{protocol_name}'")
-    ProtocolsPage(page).start_setup(protocol_name)
-    log_done("Start setup slideout opened")
+    log_step(f"Look for an open run on '{robot_name}'")
+    if _open_existing_run_if_present(page, robot_name):
+        log_done("Reusing the current protocol run")
+    else:
+        target = ProtocolRunTarget(protocol_name=protocol_name, robot_name=robot_name)
+        log_step(f"Start setup for '{protocol_name}'")
+        ProtocolsPage(page).start_setup(protocol_name)
+        log_done("Start setup slideout opened")
 
-    log_step(f"Select robot '{robot_name}' and proceed to run")
-    ChooseRobotToRunProtocolSlideout(page).start_run(target)
-    run_page = ProtocolRunPage(page)
-    run_page.wait_until_open()
-    log_done("Protocol run page opened")
+        log_step(f"Select robot '{robot_name}' and proceed to run")
+        ChooseRobotToRunProtocolSlideout(page).start_run(target)
+        run_page.wait_until_open()
+        log_done("Protocol run page opened")
 
     log_step("Click each run tab")
     run_page.open_all_tabs()

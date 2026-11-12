@@ -25,9 +25,9 @@ def test_short_note_is_rejected(crs_logged_in: Page) -> None:
     AppDocumentationRequired(crs_logged_in).submit_short_note()
 
 
-@pytest.mark.skip(reason="Fill in AppDocumentationRequired.view_actions from the live desktop screen")
+@pytest.mark.skip(reason="Needs a live action that opens Documentation required first")
 def test_view_actions_lists_documented_actions(crs_logged_in: Page) -> None:
-    """View actions lists the actions that must be documented."""
+    """Action list is visible on Documentation required (desktop shows it inline)."""
     AppDocumentationRequired(crs_logged_in).view_actions()
 
 

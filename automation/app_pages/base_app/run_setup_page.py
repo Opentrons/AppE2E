@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from playwright.sync_api import Locator, Page, expect
 
 from automation.app_helpers.locator_helpers import exact_text
@@ -13,6 +15,7 @@ class RunSetupPage(AppBasePage):
     """Interact with Instruments, Deck Hardware, offsets, labware, and camera setup."""
 
     STEPS = ("Instruments", "Deck Hardware", "Labware Offsets", "Labware & Liquids", "Camera")
+    _CONTENT = re.compile(r"^SetupStep_content_(expanded|collapsed)$")
 
     def __init__(self, page: Page) -> None:
         super().__init__(page)
@@ -20,14 +23,14 @@ class RunSetupPage(AppBasePage):
     def step(self, title: str) -> Locator:
         if title not in self.STEPS:
             raise ValueError(f"Unknown run setup step: {title}")
-        # Titles like "Camera" also appear on RoundTabs — only keep matches that
-        # sit inside a SetupStep accordion (expanded or collapsed content).
+        # Start from SetupStep content nodes, then filter by title. Do not start
+        # from get_by_text(title): "Camera" also labels a RoundTab whose ancestor
+        # tree contains the (sibling) Setup panel, so .first would click the tab
+        # and leave SetupStep_content_expanded missing.
         return (
-            self.page.get_by_text(exact_text(title))
-            .locator(
-                "xpath=ancestor::*[.//*[@data-testid='SetupStep_content_expanded' "
-                "or @data-testid='SetupStep_content_collapsed']][1]"
-            )
+            self.page.get_by_test_id(self._CONTENT)
+            .locator("xpath=..")
+            .filter(has=self.page.get_by_text(exact_text(title)))
             .first
         )
 

@@ -10,7 +10,7 @@ from typing import Any, Generator
 
 import pytest
 
-from automation.app_helpers.test_progress import set_event_sink
+from automation.app_helpers.test_progress import SLOW_TEST_THRESHOLD_S, set_event_sink
 
 _active_writer: EventWriter | None = None
 
@@ -168,11 +168,13 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
             artifacts[name] = artifact_path.relative_to(root).as_posix()
         except ValueError:
             continue
+    duration = sum(float(phase.duration) for phase in phases)
     payload: dict[str, object] = {
         "type": "test_end",
         "node_id": item.nodeid,
         "status": status,
-        "duration": sum(float(phase.duration) for phase in phases),
+        "duration": duration,
+        "slow": duration > SLOW_TEST_THRESHOLD_S,
         "artifacts": artifacts,
     }
     if failure:

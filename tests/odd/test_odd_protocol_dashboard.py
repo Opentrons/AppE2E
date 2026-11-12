@@ -17,7 +17,7 @@ from automation.app_pages import OddHomePage, OddProtocolOptions, OddProtocolsPa
 _PROTOCOL_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "protocols"
 _PROTOCOL_1 = "Protocol 1: Temperature Module Disconnect Recovery Test"
 _PROTOCOL_2 = "Protocol 2: Hardware API pick up and drop labware"
-_SMOKE = "Flex Smoke Test - v2.29"
+_SMOKE = "Flex Smoke Test - v2.31"
 _PROTOCOLS = (
     (_PROTOCOL_1, _PROTOCOL_DIR / "test_tempdeck.py"),
     (_SMOKE, _PROTOCOL_DIR / "Flex_S_2_9_P200_96_GRIP_HS_MB_TC_TM_Overrides_smoke.py"),

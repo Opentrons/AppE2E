@@ -96,15 +96,14 @@
             <small>Required to select and run Calibration group tests</small>
           </span>
         </label>
-        <div class="select-all-bar">
-          <label>
-            <input id="select-all-app" type="checkbox" disabled />
-            <span>Select all available app tests</span>
-          </label>
-          <label>
-            <input id="select-all-odd" type="checkbox" disabled />
-            <span>Select all available ODD tests</span>
-          </label>
+        <div class="catalog-tabs-bar">
+          <div id="catalog-tabs" class="catalog-tabs" role="tablist" aria-label="Suite tabs"></div>
+          <div class="select-all-bar">
+            <label>
+              <input id="select-all-tab" type="checkbox" disabled />
+              <span id="select-all-tab-label">Select all on this tab</span>
+            </label>
+          </div>
         </div>
         <div id="catalog-message" class="message hidden" role="status"></div>
         <div id="run-active-banner" class="run-active-banner hidden" role="status">

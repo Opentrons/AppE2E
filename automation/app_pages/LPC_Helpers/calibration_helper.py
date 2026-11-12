@@ -12,8 +12,10 @@ from automation.app_helpers.app_readiness import click_visible_overlays
 from automation.app_helpers.locator_helpers import exact_text
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.base_app.robot_settings_page import RobotSettingsPage
+from automation.app_pages_crs.write_documentation import WriteDocumentation
 
 CalibrationCategory = Literal["pipette", "gripper", "module"]
+CalibrationSlot = Literal["B2", "C2"]
 
 # Pipette probing typically takes ~5 minutes; allow headroom before failing.
 PIPETTE_CALIBRATION_MOTION_TIMEOUT_MS = 600_000
@@ -78,7 +80,13 @@ class CalibrationHelper(AppBasePage):
     MODULE_OVERFLOW = "ModuleCalibrationOverflowMenu"
     CALIBRATE_PIPETTE = "CalibrationOverflowMenu_button_calibrate"
     MOVE_GANTRY_TO_FRONT = "Move gantry to front"
+    CONTINUE = "Continue"
     BEGIN_CALIBRATION = "Begin calibration"
+    SELECT_PIPETTE_SLOT = "Select a deck slot to calibrate the pipette."
+    SELECT_GRIPPER_SLOT = "Select a deck slot to calibrate the gripper."
+    WASTE_CHUTE_FORCES_B2 = (
+        "If the Waste Chute is installed, 96-channel pipette calibration must be performed in slot B2."
+    )
     COMPLETE_CALIBRATION = "Complete calibration"
     RESULTS_EXIT = "Results_exit"
     WIZARD_HEADER_EXIT = "Exit"
@@ -411,10 +419,23 @@ class CalibrationHelper(AppBasePage):
         expect(btn).to_be_visible()
         btn.click()
 
+    def _complete_crs_documentation_if_needed(self, *, timeout_ms: int = 5_000) -> None:
+        """Confirm Documentation required when CRS gates a calibration action.
+
+        No-op on non-CRS robots or when the modal is not showing. Reads the Action
+        list into the audit note (e.g. calibrating the 96-channel) and Confirms.
+        """
+        WriteDocumentation(self.page).complete_if_visible(timeout_ms=timeout_ms)
+
     def start_calibration_for_item(self, item: CalibrationItem) -> None:
-        """Open the row overflow menu and click Calibrate / Recalibrate."""
+        """Open the row overflow menu and click Calibrate / Recalibrate.
+
+        Under Compliance Ready, Calibrate opens Documentation required first; fill
+        and confirm that note before the pipette/module wizard is usable.
+        """
         self.open_overflow_menu_for_item(item)
         self._menu_action_for_item(item).first.click()
+        self._complete_crs_documentation_if_needed()
 
     def start_calibration(
         self,
@@ -483,15 +504,64 @@ class CalibrationHelper(AppBasePage):
         return self.start_96_channel_calibration()
 
     def click_move_gantry_to_front(self) -> None:
+        # CRS may still be showing Documentation required after Calibrate.
+        self._complete_crs_documentation_if_needed()
         btn = self.page.get_by_role("button", name=self.MOVE_GANTRY_TO_FRONT)
         expect(btn).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
         btn.click()
 
-    def click_begin_calibration(self) -> None:
-        """Click Begin calibration after the probe-attach step is ready."""
-        btn = self.page.get_by_role("button", name=self.BEGIN_CALIBRATION)
+    def click_continue_attach_probe(self) -> None:
+        """Leave Attach probe after the probe is installed.
+
+        Opens SelectCalibrationSlot unless 96-channel + waste chute forces B2,
+        in which case probing starts immediately.
+        """
+        btn = self.page.get_by_role("button", name=self.CONTINUE)
         expect(btn).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
         btn.click()
+
+    def select_calibration_slot(self, slot: CalibrationSlot = "B2") -> None:
+        """Pick B2 or C2 when SelectCalibrationSlot is shown; no-op if probing started.
+
+        Slot chips are RadioButton ``<label>`` nodes. ``get_by_role("label", name=…)``
+        misses them in the a11y tree; filter the DOM label by exact slot text instead.
+        """
+        pipette_heading = self.page.get_by_text(exact_text(self.SELECT_PIPETTE_SLOT))
+        gripper_heading = self.page.get_by_text(exact_text(self.SELECT_GRIPPER_SLOT))
+        heading = pipette_heading.or_(gripper_heading)
+        begin = self.page.get_by_role("button", name=self.BEGIN_CALIBRATION)
+        calibrating = self.page.get_by_text(self.CALIBRATING_RE)
+        expect(heading.or_(begin).or_(calibrating).first).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+        if calibrating.count() > 0 and calibrating.first.is_visible():
+            return
+        if heading.count() > 0 and heading.first.is_visible():
+            label = self.page.locator("label").filter(has_text=exact_text(slot))
+            expect(label).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+            if label.get_attribute("aria-selected") != "true":
+                label.click()
+            expect(label).to_have_attribute("aria-selected", "true")
+        expect(begin).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+        begin.click()
+
+    def expect_waste_chute_forces_b2_warning(self) -> None:
+        """Assert the Attach probe alert when 96-channel calibration must use B2."""
+        expect(self.page.get_by_text(self.WASTE_CHUTE_FORCES_B2)).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+
+    def click_begin_calibration(self, slot: CalibrationSlot = "B2") -> None:
+        """Advance from Attach probe through optional B2/C2 selection into probing.
+
+        Module wizards still show Begin calibration on Attach probe with no slot
+        picker; pipette/gripper flows use Continue → SelectCalibrationSlot first
+        (unless 96-channel + waste chute forces B2).
+        """
+        continue_btn = self.page.get_by_role("button", name=self.CONTINUE)
+        begin_btn = self.page.get_by_role("button", name=self.BEGIN_CALIBRATION)
+        expect(continue_btn.or_(begin_btn).first).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+        if continue_btn.count() > 0 and continue_btn.first.is_visible():
+            continue_btn.first.click()
+            self.select_calibration_slot(slot)
+            return
+        begin_btn.click()
 
     def wait_for_pipette_calibration_motion(self, *, timeout_ms: float = PIPETTE_CALIBRATION_MOTION_TIMEOUT_MS) -> None:
         """Wait for the 'is calibrating' screen to appear, then finish (~5+ minutes)."""
@@ -503,6 +573,7 @@ class CalibrationHelper(AppBasePage):
         btn = self.page.get_by_role("button", name=self.COMPLETE_CALIBRATION)
         expect(btn).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
         btn.click()
+        self._complete_crs_documentation_if_needed()
 
     def wait_for_pipette_calibration_success(self) -> str:
         """Wait for the success screen and return its header text."""
@@ -524,11 +595,12 @@ class CalibrationHelper(AppBasePage):
 
         The header also renders an ``Exit`` control, so target the results
         button by its ``Results_exit`` label and fall back to the header only if
-        the wizard is still open.
+        the wizard is still open. CRS may ask for Documentation required again.
         """
         btn = self.results_exit_button()
         expect(btn).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
         btn.click()
+        self._complete_crs_documentation_if_needed()
 
         success_icon = self.page.get_by_alt_text(self.SUCCESS_ICON_ALT)
         try:
@@ -537,25 +609,35 @@ class CalibrationHelper(AppBasePage):
             header_exit = self.page.get_by_role("button", name=exact_text(self.WIZARD_HEADER_EXIT))
             if header_exit.count() > 0 and header_exit.first.is_visible():
                 header_exit.first.click()
+                self._complete_crs_documentation_if_needed()
             expect(success_icon).to_be_hidden(timeout=WIZARD_STEP_TIMEOUT_MS)
 
         self.expect_wizard_closed()
 
     def expect_wizard_closed(self) -> None:
-        """Wait until the wizard is gone and Robot Settings > Calibration is back."""
+        """Wait until the wizard is gone and Robot Settings > Calibration is back.
+
+        Long pipette/module calibrations can expire the Compliance Ready session;
+        re-sign in before later steps assert on the calibration tab.
+        """
         expect(self.page.get_by_text(exact_text(self.ABOUT_CALIBRATION))).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
+        self._robot_settings._ensure_crs_login_if_needed()
 
     def run_96_channel_calibration(
-        self, *, calibration_timeout_ms: float = PIPETTE_CALIBRATION_MOTION_TIMEOUT_MS
+        self,
+        *,
+        slot: CalibrationSlot = "B2",
+        calibration_timeout_ms: float = PIPETTE_CALIBRATION_MOTION_TIMEOUT_MS,
     ) -> CalibrationItem:
         """Run the full Flex 96-channel pipette calibration wizard end-to-end.
 
-        Flow: overflow → Move gantry to front → Begin calibration (after probe attach) →
+        Flow: overflow → Move gantry to front → Continue (attach probe) →
+        select B2/C2 when offered (skipped when waste chute forces B2) →
         wait for probing to finish → Complete calibration → success → Results Exit.
         """
         item = self.start_96_channel_calibration()
         self.click_move_gantry_to_front()
-        self.click_begin_calibration()
+        self.click_begin_calibration(slot)
         self.wait_for_pipette_calibration_motion(timeout_ms=calibration_timeout_ms)
         self.click_complete_calibration()
         self.last_success_message = self.wait_for_pipette_calibration_success()
@@ -658,6 +740,7 @@ class CalibrationHelper(AppBasePage):
         btn = self.page.get_by_role("button", name=exact_text(self.MODULE_SETUP_FINISH))
         expect(btn).to_be_visible(timeout=WIZARD_STEP_TIMEOUT_MS)
         btn.click()
+        self._complete_crs_documentation_if_needed()
         self.expect_wizard_closed()
 
     def run_module_calibration(

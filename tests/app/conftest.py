@@ -144,12 +144,16 @@ def robot_connection(
 
 
 @pytest.fixture(scope="session")
-def run_local_app(
+def electron_page(
     robot_connection: RobotConnection,
     robot_profile: RobotProfile | None,
     request: pytest.FixtureRequest,
 ) -> Generator[Page, None, None]:
-    """Launch (or attach to) the Opentrons desktop app and yield the Playwright page."""
+    """Launch (or attach to) the Opentrons desktop app and yield the Playwright page.
+
+    Prefer ``run_local_app`` in tests. CRS admin-walk overrides ``run_local_app`` after
+    login while still depending on this fixture for the raw Electron page.
+    """
     del robot_connection
 
     headed = is_headed_run(request.config)
@@ -200,6 +204,12 @@ def run_local_app(
 
 
 @pytest.fixture(scope="session")
+def run_local_app(electron_page: Page) -> Page:
+    """Page used by desktop app tests (logged out unless a suite overrides this)."""
+    return electron_page
+
+
+@pytest.fixture(scope="session")
 def robot_name(request: pytest.FixtureRequest, robot_profile: RobotProfile | None) -> str:
     """Resolved robot display name used on the Devices page."""
     name = _resolve_robot_name(request.config, robot_profile)
@@ -208,15 +218,15 @@ def robot_name(request: pytest.FixtureRequest, robot_profile: RobotProfile | Non
 
 
 @pytest.fixture(scope="session")
-def app_version(run_local_app: Page) -> Version:
+def app_version(electron_page: Page) -> Version:
     """Desktop app software version from App Settings → General (session-scoped)."""
-    settings = AppSettingsPage(run_local_app)
+    settings = AppSettingsPage(electron_page)
     log_step("Read App Software Version from App Settings")
     raw = settings.read_app_software_version()
     version = parse_app_version(raw)
     log_done(f"App software version: {raw!r} → {version}")
     # Leave later fixtures on Devices landing rather than stuck in Settings.
-    navigate_to(run_local_app, "Devices", DevicesPage.DEVICES_LANDING_URL)
+    navigate_to(electron_page, "Devices", DevicesPage.DEVICES_LANDING_URL)
     return version
 
 

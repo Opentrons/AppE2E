@@ -22,18 +22,22 @@ ROBOT_DETAIL_REQUIRED = "tests/app/device_cards/test_devices_nav.py::test_robot_
 
 
 @pytest.fixture(scope="session")
-def _robot_settings_page(run_local_app: Page, robot_name: str) -> RobotSettingsPage:
-    """Shared Robot Settings page object (navigation happens per test, while video records)."""
+def robot_settings_page(run_local_app: Page, robot_name: str) -> RobotSettingsPage:
+    """Shared Robot Settings page object (navigation happens per test, while video records).
+
+    Name must not start with ``_``: CRS admin-walk mirrors use ``import *``, which
+    skips underscore names and would leave ``robot_settings`` without this fixture.
+    """
     return RobotSettingsPage(run_local_app, robot_name=robot_name)
 
 
 @pytest.fixture
-def robot_settings(_robot_settings_page: RobotSettingsPage, robot_name: str) -> RobotSettingsPage:
+def robot_settings(robot_settings_page: RobotSettingsPage, robot_name: str) -> RobotSettingsPage:
     """Open Robot Settings inside each test so headed video includes the navigation."""
     log_step(f"Open Robot Settings for '{robot_name}'")
-    _robot_settings_page.navigate()
+    robot_settings_page.navigate()
     log_done(f"Robot Settings loaded ({robot_name})")
-    return _robot_settings_page
+    return robot_settings_page
 
 
 @pytest.mark.workflow(
@@ -224,6 +228,7 @@ def test_analytics(robot_settings: RobotSettingsPage) -> None:
     log_done("Analytics OK")
 
 
+@pytest.mark.slow
 @pytest.mark.workflow(
     group="robot_settings",
     section="Advanced",

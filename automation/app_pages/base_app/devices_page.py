@@ -221,3 +221,19 @@ class DevicesPage(AppBasePage):
             "Robot Settings",
             test_id=f"RobotOverviewOverflowMenu_robotSettings_{self.robot_name}",
         )
+
+    def go_to_run_link(self) -> Locator:
+        """Robot overview ``Go to Run`` link when a protocol run is current."""
+        return self.page.get_by_role("link", name=exact_text("Go to Run"))
+
+    def open_current_run_if_present(self) -> bool:
+        """Open the current protocol run from robot detail when ``Go to Run`` is shown.
+
+        Returns False when the robot has no current-run banner.
+        """
+        self._ensure_on_robot_detail()
+        link = self.go_to_run_link()
+        if link.count() == 0 or not link.first.is_visible():
+            return False
+        link.first.click()
+        return True

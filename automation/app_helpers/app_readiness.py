@@ -7,6 +7,8 @@ import time
 
 from playwright.sync_api import Locator, Page, expect
 
+from automation.app_helpers.locator_helpers import exact_text
+
 OVERLAY_SELECTOR = '[data-sentry-component="Overlay"]'
 # Current Slideout close control (app/src/atoms/Slideout). Legacy testid kept as fallback.
 SLIDEOUT_CLOSE_SELECTOR = 'button[aria-label="exit"], [data-testid^="Slideout_icon_close_"]'
@@ -16,10 +18,26 @@ LANGUAGE_MODAL_BUTTONS = ("Continue", "Use system language", "Don't change")
 APP_SETTINGS_URL = re.compile(r"#/app-settings")
 # Navbar gear menu debounces navigation by 300ms (see app/src/App/Navbar/index.tsx).
 GEAR_NAV_DEBOUNCE_MS = 350
+# Left in place during the CRS admin walk. Closing them would hide the signal.
+_CRS_GATE_TITLES = ("Documentation required", "Compliance Ready Software login")
+
+
+def crs_gate_is_visible(page: Page) -> bool:
+    """True when Documentation required or the Compliance Ready login form is showing."""
+    for title in _CRS_GATE_TITLES:
+        heading = page.get_by_text(exact_text(title))
+        try:
+            if heading.count() > 0 and heading.first.is_visible():
+                return True
+        except Exception:
+            continue
+    return False
 
 
 def dismiss_blocking_ui(page: Page, *, timeout: float = 15_000) -> None:
     """Close startup modals and slideouts so the app is ready for navigation."""
+    if crs_gate_is_visible(page):
+        return
     _dismiss_language_modals(page)
     dismiss_blocking_toasts(page)
     close_visible_modals(page)
@@ -54,6 +72,8 @@ def close_visible_slideouts(page: Page, *, deadline_s: float = 5.0, pause_ms: in
     reports that button as visible, so a visibility check alone spends the whole
     deadline clicking a control that is not on screen.
     """
+    if crs_gate_is_visible(page):
+        return False
     deadline = time.time() + deadline_s
     close_buttons = page.locator(SLIDEOUT_CLOSE_SELECTOR)
     closed_any = False
@@ -76,6 +96,8 @@ def close_visible_slideouts(page: Page, *, deadline_s: float = 5.0, pause_ms: in
 
 def click_visible_overlays(page: Page, *, timeout_ms: float = 1_000) -> bool:
     """Click visible Overlay components to dismiss menus/slideouts. Returns True if any clicked."""
+    if crs_gate_is_visible(page):
+        return False
     overlays = page.locator(OVERLAY_SELECTOR)
     clicked_any = False
     for index in range(overlays.count()):
@@ -111,6 +133,8 @@ def dismiss_blocking_toasts(page: Page) -> bool:
 
 def close_visible_modals(page: Page, *, timeout_ms: float = 2_000) -> bool:
     """Click ModalHeader close icons when present. Returns True if any close was attempted."""
+    if crs_gate_is_visible(page):
+        return False
     close_buttons = page.locator(MODAL_CLOSE_SELECTOR)
     closed_any = False
     for index in range(close_buttons.count()):

@@ -11,6 +11,7 @@ from _pytest.nodes import Item
 from _pytest.python import Function
 
 from automation.app_helpers.reporting import ensure_test_results_dir, report_html_path
+from automation.app_helpers.test_progress import SLOW_TEST_THRESHOLD_S, safe_print
 from utility import _pause_for_debugging, troubleshoot_and_pause
 
 
@@ -64,12 +65,21 @@ def pytest_collection_modifyitems(config: Config, items: list[Item]) -> None:
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item: Item, call: pytest.CallInfo) -> Generator[None, Any, None]:
-    """Same pause path as ``troubleshoot_and_pause`` when fixture setup fails."""
+    """Pause on fixture setup failure; mark call bodies that exceed the slow threshold."""
     outcome = yield
     report = outcome.get_result()
     if report.failed and call.when == "setup" and _pause_on_failure_enabled(item.config):
         error = report.longrepr if isinstance(report.longrepr, BaseException) else None
         _pause_for_debugging(item.nodeid, error, item=item)
+    if call.when == "call" and report.duration > SLOW_TEST_THRESHOLD_S:
+        # Hard timeout is 500s; still flag anything that took longer than 300s.
+        item.user_properties.append(("slow_over_300s", f"{report.duration:.1f}"))
+        if item.get_closest_marker("slow") is None:
+            item.add_marker(pytest.mark.slow)
+        safe_print(
+            f"  [slow] {item.nodeid} took {report.duration:.1f}s "
+            f"(threshold {SLOW_TEST_THRESHOLD_S:.0f}s; hard timeout 500s)"
+        )
 
 
 def pytest_configure(config: Any) -> None:

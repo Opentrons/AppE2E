@@ -13,7 +13,7 @@ from automation.app_pages.odd.odd_protocol_section import OddProtocolOptions, Pr
 _USERNAME = "testadmin"
 _PASSWORD = "testadminpassword"
 
-_SMOKE = "Flex Smoke Test - v2.29"
+_SMOKE = "Flex Smoke Test - v2.31"
 _PROTOCOL_1 = "Protocol 1: Temperature Module Disconnect Recovery Test"
 _PROTOCOL_2 = "Protocol 2: Hardware API pick up and drop labware"
 

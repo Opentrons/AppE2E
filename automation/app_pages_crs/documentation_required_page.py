@@ -14,6 +14,7 @@ class AppDocumentationRequired(AppBasePage):
     """Audit note prompted before a Compliance Ready action."""
 
     HEADING = "Documentation required"
+    ACTION_LIST = "Action list"
     MIN_NOTE_LENGTH = 10
 
     def __init__(self, page: Page) -> None:
@@ -33,6 +34,11 @@ class AppDocumentationRequired(AppBasePage):
         return self.dialog.get_by_text(exact_text(self.HEADING))
 
     @property
+    def action_list_heading(self) -> Locator:
+        """Desktop Action list section title (list is inline, not behind View actions)."""
+        return self.dialog.get_by_text(exact_text(self.ACTION_LIST))
+
+    @property
     def note_field(self) -> Locator:
         """Note entry labeled for the signed-in user."""
         return self.dialog.get_by_role(
@@ -47,7 +53,7 @@ class AppDocumentationRequired(AppBasePage):
 
     @property
     def view_actions_button(self) -> Locator:
-        """Opens the list of actions that must be documented."""
+        """Opens the list of actions that must be documented (ODD; not used on desktop)."""
         return self.dialog.get_by_role("button", name=exact_text("View actions"))
 
     @property
@@ -82,8 +88,15 @@ class AppDocumentationRequired(AppBasePage):
         expect(self.heading).to_be_visible()
 
     def view_actions(self) -> None:
-        """Open View actions and require the documented-action list."""
-        raise NotImplementedError("Fill in from the live desktop Documentation required screen.")
+        """Require the Action list section (always visible on the desktop modal)."""
+        expect(self.heading).to_be_visible()
+        expect(self.action_list_heading).to_be_visible()
+
+    def expect_actions_listed(self, *actions: str) -> None:
+        """Require each action label in the Documentation required Action list."""
+        self.view_actions()
+        for action in actions:
+            expect(self.dialog.get_by_text(exact_text(action))).to_be_visible()
 
     def confirm_note(self, note: str) -> None:
         """Submit ``note`` and require the documentation screen to close."""

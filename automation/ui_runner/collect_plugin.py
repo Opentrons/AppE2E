@@ -8,10 +8,29 @@ from typing import Any
 
 import pytest
 
-from automation.ui_runner.workflows import CATALOG_PATHS, GROUP_BY_ID, WORKFLOW_GROUPS
+from automation.ui_runner.workflows import CATALOG_PATHS, CATALOG_TABS, GROUP_BY_ID, WORKFLOW_GROUPS
 
 REQUIRED_WORKFLOW_FIELDS = frozenset({"group", "section", "label", "order"})
 OPTIONAL_WORKFLOW_FIELDS = frozenset({"requires", "cases"})
+
+_APP_NODE_PREFIX = "tests/app/"
+_CRS_APP_NODE_PREFIX = "tests/compliance/admin_walk/crs_app/"
+
+
+def _catalog_tab_for(item: pytest.Item, group_id: str) -> str:
+    """CRS Admin mirrors land on APP CRS; everything else follows the group tab."""
+    if item.get_closest_marker("crs_login") is not None:
+        return "app_crs"
+    return GROUP_BY_ID[group_id].tab
+
+
+def _remap_requires(node_id: str, requires: str | None) -> str | None:
+    """Point CRS Admin mirrors at mirrored prerequisites, not logged-out app nodes."""
+    if not requires:
+        return requires
+    if node_id.startswith(_CRS_APP_NODE_PREFIX) and requires.startswith(_APP_NODE_PREFIX):
+        return _CRS_APP_NODE_PREFIX + requires[len(_APP_NODE_PREFIX) :]
+    return requires
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -87,10 +106,11 @@ def _serialize_item(item: pytest.Item) -> dict[str, Any] | None:
     return {
         "node_id": item.nodeid,
         "group": group_id,
+        "tab": _catalog_tab_for(item, group_id),
         "section": metadata["section"],
         "label": metadata["label"],
         "order": metadata["order"],
-        "requires": metadata.get("requires"),
+        "requires": _remap_requires(item.nodeid, metadata.get("requires")),
         "cases": metadata.get("cases") or [],
         "implemented": skip is None,
         "placeholder": skip is not None,
@@ -129,7 +149,17 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     group_order = {group.id: group.order for group in WORKFLOW_GROUPS}
     tests.sort(key=lambda test: (group_order[test["group"]], test["section"], test["order"], test["node_id"]))
     payload = {
-        "groups": [{"id": group.id, "label": group.label, "order": group.order} for group in WORKFLOW_GROUPS],
+        "tabs": [{"id": tab_id, "label": label} for tab_id, label in CATALOG_TABS],
+        "groups": [
+            {
+                "id": group.id,
+                "label": group.label,
+                "order": group.order,
+                "tab": group.tab,
+                "collapsible": group.collapsible,
+            }
+            for group in WORKFLOW_GROUPS
+        ],
         "tests": tests,
     }
     path = Path(destination)

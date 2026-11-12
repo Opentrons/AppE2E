@@ -110,6 +110,7 @@ class RobotSettingsPage(AppBasePage):
 
         Prefers a hash deep-link from Protocols (or elsewhere) so we skip Devices →
         card → overflow. Falls back to the click path when the route does not stick.
+        After a rename under Compliance Ready, the session may require Log in again.
         """
         dismiss_blocking_ui(self.page)
         if not self.robot_settings_url.search(self.page.url):
@@ -126,9 +127,24 @@ class RobotSettingsPage(AppBasePage):
                     devices.navigate()
                     devices.open_robot_settings()
             expect(self.page).to_have_url(self.robot_settings_url)
+        self._ensure_crs_login_if_needed()
         expect(self.page_heading).to_be_visible()
         if tab is not None:
             self.open_tab(*tab)
+
+    def _ensure_crs_login_if_needed(self) -> None:
+        """Sign in again when Compliance Ready shows Log in on this robot detail."""
+        log_in = self.page.get_by_test_id("basic_button_Log in")
+        try:
+            if log_in.count() == 0 or not log_in.first.is_visible():
+                return
+        except Exception:
+            return
+        from automation.app_helpers.crs_accounts import load_crs_account
+        from automation.app_pages_crs import ComplianceLoginPage
+
+        account = load_crs_account()
+        ComplianceLoginPage.from_account(self.page, account).ensure_logged_in_as(account)
 
     def open_tab(self, name: str, slug: str) -> None:
         """Click a Robot Settings tab and wait for its URL slug."""
@@ -270,7 +286,11 @@ class RobotSettingsPage(AppBasePage):
         )
 
     def submit_robot_rename(self, new_name: str) -> None:
-        """Fill the Rename slideout and submit; lands on Devices with the new name."""
+        """Fill the Rename slideout and submit; lands on Devices with the new name.
+
+        Under Compliance Ready, submit opens Documentation required first; the CRS
+        admin-walk click fallback confirms that note, then the app returns to Devices.
+        """
         name_input = self._rename_robot_name_input()
         expect(name_input).to_be_visible()
         name_input.click()
@@ -278,6 +298,8 @@ class RobotSettingsPage(AppBasePage):
         submit = self._rename_robot_submit()
         expect(submit).to_be_enabled()
         submit.click()
+        # Non-CRS: navigation is immediate. CRS: Documentation required may still be
+        # closing when the click fallback confirmed the audit note.
         expect(self.page).to_have_url(
             DevicesPage.DEVICES_LANDING_URL,
             timeout=self.DEVICE_RESET_NAV_TIMEOUT_MS,

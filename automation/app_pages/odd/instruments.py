@@ -14,6 +14,7 @@ from automation.app_pages.odd.odd_shell import OddShell
 Mount = Literal["left", "right", "extension"]
 PipetteMount = Literal["left", "right", "left+right"]
 InfoLabel = Literal["last calibrated", "firmware version", "serial number"]
+CalibrationSlot = Literal["B2", "C2"]
 
 # Homing to the front of the deck, then the probe sweep itself.
 _GANTRY_TIMEOUT_MS = 120_000
@@ -177,14 +178,58 @@ class OddInstrumentsPage(OddShell):
         move_gantry = self.page.get_by_role("button", name="Move gantry to front")
         expect(move_gantry).to_be_visible(timeout=15_000)
         move_gantry.click()
-        expect(self.page.get_by_role("button", name="Begin calibration")).to_be_visible(timeout=_GANTRY_TIMEOUT_MS)
+        expect(self.page.get_by_role("button", name="Continue")).to_be_visible(timeout=_GANTRY_TIMEOUT_MS)
 
-    def begin_calibration(self) -> None:
-        """Begin calibration. The calibration probe must already be on the pipette."""
+    def continue_attach_probe(self) -> None:
+        """Confirm the calibration probe is attached and leave the Attach probe step.
+
+        With a normal deck, Continue opens SelectCalibrationSlot (B2 / C2).
+        With a 96-channel pipette and a waste chute on deck, Continue starts
+        probing immediately in B2 and no slot picker is shown.
+        """
         print("You must have a calibration probe attached to the mount to initiate this step")
-        begin_calibration = self.page.get_by_role("button", name="Begin calibration")
-        expect(begin_calibration).to_be_visible(timeout=15_000)
-        begin_calibration.click()
+        continue_btn = self.page.get_by_role("button", name="Continue")
+        expect(continue_btn).to_be_visible(timeout=15_000)
+        continue_btn.click()
+
+    def select_calibration_slot(self, slot: CalibrationSlot = "B2") -> None:
+        """Choose B2 or C2 on SelectCalibrationSlot when that screen is present.
+
+        Defaults to B2. No-op when 96-channel + waste chute already forced B2 and
+        probing has started (or is about to), so there is no slot picker.
+        """
+        heading = self.page.get_by_text(exact_text("Select a deck slot to calibrate the pipette."))
+        begin = self.page.get_by_role("button", name="Begin calibration")
+        stand_back = self.page.get_by_text("Stand back")
+        expect(heading.or_(begin).or_(stand_back).first).to_be_visible(timeout=15_000)
+        if stand_back.count() > 0 and stand_back.first.is_visible():
+            return
+        if heading.count() > 0 and heading.first.is_visible():
+            # RadioButton labels are not reliably named in the a11y tree.
+            label = self.page.locator("label").filter(has_text=exact_text(slot))
+            expect(label).to_be_visible(timeout=15_000)
+            if label.get_attribute("aria-selected") != "true":
+                label.click()
+            expect(label).to_have_attribute("aria-selected", "true")
+        expect(begin).to_be_visible(timeout=15_000)
+        begin.click()
+
+    def expect_waste_chute_forces_b2_warning(self) -> None:
+        """Assert the Attach probe alert when 96-channel calibration must use B2."""
+        expect(
+            self.page.get_by_text(
+                "If the Waste Chute is installed, 96-channel pipette calibration must be performed in slot B2."
+            )
+        ).to_be_visible(timeout=15_000)
+
+    def begin_calibration(self, slot: CalibrationSlot = "B2") -> None:
+        """Leave Attach probe, pick a calibration slot if offered, then start probing.
+
+        ``slot`` is used only when SelectCalibrationSlot is shown (not when
+        96-channel + waste chute forces B2).
+        """
+        self.continue_attach_probe()
+        self.select_calibration_slot(slot)
 
     def wait_for_calibration(self) -> None:
         """Wait out probing, confirm the probe-removal step, then exit the wizard."""
@@ -205,17 +250,18 @@ class OddInstrumentsPage(OddShell):
         exit_button.click()
         expect(self.info_item("last calibrated")).to_be_visible(timeout=15_000)
 
-    def calibrate_pipette(self, mount: PipetteMount) -> None:
+    def calibrate_pipette(self, mount: PipetteMount, *, slot: CalibrationSlot = "B2") -> None:
         """Calibrate one pipette end to end.
 
         ``mount`` is ``left``, ``right``, or ``left+right`` (96-channel).
         Opens that mount, then runs Calibrate → Move gantry to front →
-        Begin calibration → wait for the probe sweep to finish.
+        Continue (attach probe) → select B2/C2 when offered → wait for the
+        probe sweep to finish.
         """
         self.open_pipette(mount)
         self.calibrate_mount()
         self.move_gantry_to_front()
-        self.begin_calibration()
+        self.begin_calibration(slot)
         self.wait_for_calibration()
 
     def info_item(self, label: InfoLabel) -> Locator:

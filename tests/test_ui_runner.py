@@ -71,6 +71,39 @@ def test_catalog_resolves_prerequisite_once(tmp_path: Path) -> None:
     ]
 
 
+def test_catalog_resolves_transitive_prerequisites_in_order(tmp_path: Path) -> None:
+    catalog = _catalog(tmp_path)
+    catalog._payload["tests"].extend(
+        [
+            {
+                "node_id": "tests/test_example.py::test_mid",
+                "implemented": True,
+                "requires": "tests/test_example.py::test_setup",
+            },
+            {
+                "node_id": "tests/test_example.py::test_leaf",
+                "implemented": True,
+                "requires": "tests/test_example.py::test_mid",
+            },
+        ]
+    )
+    # Selection order is leaf-first (UI Set insertion); resolve must still run deps first.
+    resolved = asyncio.run(
+        catalog.resolve(
+            [
+                "tests/test_example.py::test_leaf",
+                "tests/test_example.py::test_mid",
+                "tests/test_example.py::test_setup",
+            ]
+        )
+    )
+    assert resolved == [
+        "tests/test_example.py::test_setup",
+        "tests/test_example.py::test_mid",
+        "tests/test_example.py::test_leaf",
+    ]
+
+
 def test_catalog_rejects_unknown_tests(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Unknown test node IDs"):
         asyncio.run(_catalog(tmp_path).resolve(["tests/test_example.py::test_unknown"]))

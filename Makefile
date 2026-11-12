@@ -15,7 +15,8 @@ PYTEST_HEADED := $(if $(HEADED),HEADED=1,)
 	test-app test-app-headed test-app-nav test-app-nav-headed \
 	test-app-device-cards test-app-device-cards-headed \
 	test-app-robot-settings test-app-robot-settings-headed \
-	test-app-calibration test-app-calibration-headed run_abr_2_and_4 \
+	test-app-calibration test-app-calibration-headed \
+	test-app-admin-headed run_abr_2_and_4 \
 	ui test-ui catalog \
 	test-odd test-odd-headed \
 	playwriting \
@@ -128,6 +129,13 @@ test-app-calibration-headed:
 		TEST_PATH=tests/app/calibration/ \
 		HEADED_ENV="HEADED=1" \
 		PYTEST_ARGS="-s $(PYTEST_ARGS)"
+
+# CRS logged-in set only. Existing tests/app/ targets stay logged out.
+# Example: make test-app-admin-headed PYTEST_ARGS="-k test_robot_detail_from_devices_list"
+test-app-admin-headed:
+	@$(MAKE) --no-print-directory _pytest-app \
+		TEST_PATH=tests/compliance/admin_walk/ \
+		HEADED_ENV="HEADED=1"
 
 # Flex ODD (remote CDP on ROBOT_IP:9223 — enable Developer Tools on the touchscreen first)
 # Examples:

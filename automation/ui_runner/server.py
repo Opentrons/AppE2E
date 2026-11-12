@@ -180,21 +180,35 @@ class WorkflowCatalog:
             return self._payload
 
     async def resolve(self, selected: list[str]) -> list[str]:
+        """Expand prerequisites and return a dependency-first run order."""
         payload = await self.load()
         tests = {test["node_id"]: test for test in payload["tests"]}
         unknown = [node_id for node_id in selected if node_id not in tests]
         if unknown:
             raise ValueError(f"Unknown test node IDs: {unknown}")
-        resolved = list(dict.fromkeys(selected))
-        index = 0
-        while index < len(resolved):
-            required = tests[resolved[index]].get("requires")
-            if required and required not in resolved:
-                if required not in tests:
-                    raise ValueError(f"Missing prerequisite in catalog: {required}")
-                resolved.insert(0, required)
-            index += 1
-        return resolved
+
+        ordered: list[str] = []
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(node_id: str) -> None:
+            if node_id in visited:
+                return
+            if node_id in visiting:
+                raise ValueError(f"Workflow prerequisite cycle involving: {node_id}")
+            if node_id not in tests:
+                raise ValueError(f"Missing prerequisite in catalog: {node_id}")
+            visiting.add(node_id)
+            required = tests[node_id].get("requires")
+            if required:
+                visit(required)
+            visiting.remove(node_id)
+            visited.add(node_id)
+            ordered.append(node_id)
+
+        for node_id in selected:
+            visit(node_id)
+        return ordered
 
 
 class EventStream:

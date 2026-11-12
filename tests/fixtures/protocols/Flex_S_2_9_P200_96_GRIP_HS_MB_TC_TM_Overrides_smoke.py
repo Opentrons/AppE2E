@@ -2,6 +2,10 @@
 # CHANGELOG #
 #############
 
+# 2.31
+# -
+
+
 # 2.29
 # - Include command annotations
 # -
@@ -109,13 +113,13 @@
 from opentrons import protocol_api
 
 metadata = {
-    "protocolName": "Flex Smoke Test - v2.29",
+    "protocolName": "Flex Smoke Test - v2.31",
     "author": "QA team",
 }
 
 requirements = {
     "robotType": "Flex",
-    "apiLevel": "2.29",
+    "apiLevel": "2.31",
 }
 
 

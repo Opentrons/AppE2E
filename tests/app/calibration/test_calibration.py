@@ -3,15 +3,17 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import Page
 
+from automation.app_helpers.clear_protocol_run import cancel_open_protocol_run_if_present
 from automation.app_helpers.test_progress import log_done, log_step
 from automation.app_pages import DeckConfigurationPage
 from automation.app_pages.LPC_Helpers.calibration_helper import CalibrationHelper
 
 # Gripper calibration is still manual (see Flex setup prompt).
-# Deck Configuration for HS / Temp / TC is checked before module calibration.
+# Modules require a calibrated pipette; deck check is optional (not a locked prereq).
 # Please ensure your device is reset manually before this suite
 # (Robot Settings > Advanced > Device Reset: pipette / gripper / module calibration,
 # protocol run history, labware offsets — then wait for the robot to come back).
+# An open protocol run blocks calibrate + deck edits; tests cancel one if present.
 
 """
 C44408	HS Calibration
@@ -20,7 +22,7 @@ C44406	TC Calibration
 C44404	Devices > Robot > Protocol Run > Module controls
 """
 
-DECK_CONFIG_FOR_MODULES = "tests/app/calibration/test_calibration.py::test_deck_configuration_before_modules"
+PIPETTE_96_CHANNEL = "tests/app/calibration/test_calibration.py::test_96_channel_calibration"
 
 
 @pytest.mark.workflow(group="calibration", section="Status", label="Review calibration status", order=10)
@@ -73,12 +75,17 @@ def test_calibration_overflow_menu(run_local_app: Page, robot_name: str) -> None
     cases=(("T69746", "Pipette Calibrations"),),
 )
 def test_96_channel_calibration(run_local_app: Page, robot_name: str) -> None:
-    """Run the full Flex 96-channel pipette calibration wizard."""
+    """Run the full Flex 96-channel pipette calibration wizard.
+
+    After attach-probe Continue, SelectCalibrationSlot offers B2/C2 (default B2)
+    unless a waste chute is on deck, which forces B2 and skips the picker.
+    """
+    cancel_open_protocol_run_if_present(run_local_app, robot_name=robot_name)
     log_step(f"Open Robot Settings Calibration for '{robot_name}'")
     calibration = CalibrationHelper(run_local_app, robot_name=robot_name)
     calibration.get_calibration_page()
 
-    log_step("Run 96-channel calibration (attach probe when prompted)")
+    log_step("Run 96-channel calibration (attach probe when prompted; pick B2/C2 if offered)")
     item = calibration.run_96_channel_calibration()
     log_done(f"{calibration.last_success_message} - {item.label} ({item.serial})")
 
@@ -105,6 +112,7 @@ def test_deck_configuration_before_modules(
     if not device_details_tabs:
         pytest.skip("Deck Configuration tab requires the Device Details tabs layout.")
 
+    cancel_open_protocol_run_if_present(run_local_app, robot_name=robot_name)
     log_step(f"Check Deck Configuration for '{robot_name}' before module calibration")
     deck = DeckConfigurationPage(run_local_app, robot_name=robot_name)
     labels = deck.ensure_calibration_modules_configured()
@@ -116,7 +124,7 @@ def test_deck_configuration_before_modules(
     section="Modules",
     label="Calibrate Heater-Shaker",
     order=50,
-    requires=DECK_CONFIG_FOR_MODULES,
+    requires=PIPETTE_96_CHANNEL,
     cases=(("C44408", "HS Calibration"),),
 )
 def test_heater_shaker_calibration(run_local_app: Page, robot_name: str) -> None:
@@ -151,7 +159,7 @@ def test_heater_shaker_calibration(run_local_app: Page, robot_name: str) -> None
     section="Modules",
     label="Calibrate Temperature Module",
     order=60,
-    requires=DECK_CONFIG_FOR_MODULES,
+    requires=PIPETTE_96_CHANNEL,
     cases=(("C44407", "TD Calibration"),),
 )
 def test_temperature_module_calibration(run_local_app: Page, robot_name: str) -> None:
@@ -186,7 +194,7 @@ def test_temperature_module_calibration(run_local_app: Page, robot_name: str) ->
     section="Modules",
     label="Calibrate Thermocycler",
     order=70,
-    requires=DECK_CONFIG_FOR_MODULES,
+    requires=PIPETTE_96_CHANNEL,
     cases=(("C44406", "TC Calibration"),),
 )
 def test_thermocycler_calibration(run_local_app: Page, robot_name: str) -> None:

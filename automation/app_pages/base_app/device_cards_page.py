@@ -14,6 +14,7 @@ from automation.app_helpers.app_readiness import click_visible_overlays, close_v
 from automation.app_helpers.locator_helpers import exact_text, menu_item
 from automation.app_pages.base_app.app_base_page import AppBasePage
 from automation.app_pages.components import OverflowMenu, Slideout
+from automation.app_pages_crs.write_documentation import WriteDocumentation
 
 TC_INPUT = re.compile(r"^ThermocyclerSlideout_input_field_")
 TEMP_INPUT = re.compile(r"^TemperatureSlideout_input_field_")
@@ -949,8 +950,16 @@ class DeviceCardsPage(AppBasePage):
             return
 
         was_on = toggle.get_attribute("aria-checked") == "true"
+        before = len(WriteDocumentation.recorded_on(self.page))
         toggle.click()
-        now_on = toggle.get_attribute("aria-checked") == "true"
+        if len(WriteDocumentation.recorded_on(self.page)) == before:
+            WriteDocumentation(self.page).complete_if_visible(timeout_ms=2_500)
+        actions = WriteDocumentation.recorded_on(self.page)[before:]
+        if actions:
+            print(f"  Documented actions: {actions}")
+        expected = "false" if was_on else "true"
+        expect(toggle).to_have_attribute("aria-checked", expected, timeout=10_000)
+        now_on = expected == "true"
         print(f"  Lights toggled: {'on' if was_on else 'off'} -> {'on' if now_on else 'off'}")
 
     def cards(
