@@ -352,10 +352,11 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 # Full-suite order for ``make test-app``. Run setup remains last.
+# File manager runs before Robot Settings so Device Reset (robot restart) stays last.
 _MODULE_ORDER = (
     "device_cards/test_devices_nav.py",
-    "device_cards/test_robot_settings.py",
     "device_cards/test_robot_settings_file_manager.py",
+    "device_cards/test_robot_settings.py",
     "device_cards/test_cards.py",
     "device_cards/test_deck_configuration.py",
     "device_cards/test_run_history.py",
@@ -455,6 +456,10 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
         config.hook.pytest_deselected(items=abr_items)
         items[:] = [item for item in items if not _is_abr_test(item)]
         app_items = non_abr_app_items
+
+    # ``make ui`` passes node ids already in catalog order (prerequisites first).
+    if config.getoption("--e2e-events", default=None):
+        return
 
     module_rank = {path: index for index, path in enumerate(_MODULE_ORDER)}
     calibration_rank = {name: index for index, name in enumerate(_CALIBRATION_TEST_ORDER)}
