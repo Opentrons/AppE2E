@@ -231,7 +231,8 @@ def test_analytics(robot_settings: RobotSettingsPage) -> None:
 @pytest.mark.slow
 @pytest.mark.workflow(
     group="robot_settings",
-    section="Advanced",
+    # Own section so it sorts after every other Robot settings section in ``make ui``.
+    section="Device reset",
     label="Device Reset, then app/robot versions match",
     order=130,
     requires=ROBOT_DETAIL_REQUIRED,

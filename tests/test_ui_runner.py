@@ -17,7 +17,7 @@ from automation.app_helpers.crs_accounts import (
     save_crs_accounts,
 )
 from automation.app_helpers.test_progress import log_done, log_step, run_timed, set_event_sink
-from automation.ui_runner.collect_plugin import _validate_prerequisites
+from automation.ui_runner.collect_plugin import _remap_requires, _validate_prerequisites
 from automation.ui_runner.event_plugin import EventWriter
 from automation.ui_runner.server import (
     DEFAULT_APP_PATH,
@@ -121,6 +121,19 @@ def test_manifest_rejects_prerequisite_cycles() -> None:
     ]
     with pytest.raises(pytest.UsageError, match="prerequisite cycle"):
         _validate_prerequisites(tests)
+
+
+def test_crs_app_drops_96_channel_calibration_requires() -> None:
+    pipette = "tests/app/calibration/test_calibration.py::test_96_channel_calibration"
+    crs_hs = "tests/compliance/admin_walk/crs_app/calibration/test_calibration.py::test_heater_shaker_calibration"
+    app_hs = "tests/app/calibration/test_calibration.py::test_heater_shaker_calibration"
+    robot_detail = "tests/app/device_cards/test_devices_nav.py::test_open_robot_detail"
+
+    assert _remap_requires(crs_hs, pipette) is None
+    assert _remap_requires(app_hs, pipette) == pipette
+    assert _remap_requires(crs_hs, robot_detail) == (
+        "tests/compliance/admin_walk/crs_app/device_cards/test_devices_nav.py::test_open_robot_detail"
+    )
 
 
 def test_event_writer_adds_test_context_and_ndjson(tmp_path: Path) -> None:

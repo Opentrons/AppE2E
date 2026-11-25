@@ -180,12 +180,16 @@ class WorkflowCatalog:
             return self._payload
 
     async def resolve(self, selected: list[str]) -> list[str]:
-        """Expand prerequisites and return a dependency-first run order."""
+        """Expand prerequisites and return the catalog (on-screen) order, dependencies first.
+
+        The browser sends its selection in click order; the run follows the catalog instead.
+        """
         payload = await self.load()
         tests = {test["node_id"]: test for test in payload["tests"]}
         unknown = [node_id for node_id in selected if node_id not in tests]
         if unknown:
             raise ValueError(f"Unknown test node IDs: {unknown}")
+        catalog_index = {test["node_id"]: index for index, test in enumerate(payload["tests"])}
 
         ordered: list[str] = []
         visiting: set[str] = set()
@@ -206,7 +210,7 @@ class WorkflowCatalog:
             visited.add(node_id)
             ordered.append(node_id)
 
-        for node_id in selected:
+        for node_id in sorted(set(selected), key=catalog_index.__getitem__):
             visit(node_id)
         return ordered
 

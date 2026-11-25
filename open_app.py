@@ -19,6 +19,10 @@ from automation.app_helpers.screencast_recorder import CDP_HTTP_ATTR
 DEBUG_PORT = 9222
 ODD_CDP_PORT = 9223
 DEV_CDP_TIMEOUT_S = 180.0
+# App config override (yargs ``disable_`` prefix) for this launch only. With
+# ``devtools: true`` the app opens a detached DevTools window; Playwright attaches
+# to it too, and if it stops responding every Playwright call hangs.
+DISABLE_DEVTOOLS_ARG = "--disable_devtools"
 
 # One sync Playwright per process. A second sync_playwright().start() while the
 # desktop session is still attached raises "Sync API inside the asyncio loop".
@@ -234,7 +238,7 @@ def launch_dev_app(
 
     env = {
         **{k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"},
-        "ELECTRON_EXTRA_ARGS": f"--remote-debugging-port={debug_port}",
+        "ELECTRON_EXTRA_ARGS": f"--remote-debugging-port={debug_port} {DISABLE_DEVTOOLS_ARG}",
     }
     process = subprocess.Popen(
         ["make", "-C", "app", "dev", f"OPENTRONS_PROJECT={opentrons_project}"],
@@ -267,7 +271,7 @@ def launch_app(*, debug_port: int = DEBUG_PORT, quiet: bool = True, log_file: Pa
     env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
 
     process = subprocess.Popen(
-        [app_path, f"--remote-debugging-port={debug_port}"],
+        [app_path, f"--remote-debugging-port={debug_port}", DISABLE_DEVTOOLS_ARG],
         env=env,
         **popen_kwargs,
     )

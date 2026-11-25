@@ -15,6 +15,9 @@ OPTIONAL_WORKFLOW_FIELDS = frozenset({"requires", "cases"})
 
 _APP_NODE_PREFIX = "tests/app/"
 _CRS_APP_NODE_PREFIX = "tests/compliance/admin_walk/crs_app/"
+# Soft UI lock on APP only — CRS Admin can run module calibration without
+# selecting 96-channel calibration in ``make ui``.
+_APP_96_CHANNEL_REQUIRES = "tests/app/calibration/test_calibration.py::test_96_channel_calibration"
 
 
 def _catalog_tab_for(item: pytest.Item, group_id: str) -> str:
@@ -28,7 +31,11 @@ def _remap_requires(node_id: str, requires: str | None) -> str | None:
     """Point CRS Admin mirrors at mirrored prerequisites, not logged-out app nodes."""
     if not requires:
         return requires
-    if node_id.startswith(_CRS_APP_NODE_PREFIX) and requires.startswith(_APP_NODE_PREFIX):
+    if not node_id.startswith(_CRS_APP_NODE_PREFIX):
+        return requires
+    if requires == _APP_96_CHANNEL_REQUIRES:
+        return None
+    if requires.startswith(_APP_NODE_PREFIX):
         return _CRS_APP_NODE_PREFIX + requires[len(_APP_NODE_PREFIX) :]
     return requires
 
@@ -140,14 +147,36 @@ def _validate_prerequisites(tests: list[dict[str, Any]]) -> None:
             current = requirements[current]
 
 
+def _sort_catalog(tests: list[dict[str, Any]]) -> None:
+    """Order tests as ``make ui`` shows them and runs them: tab, group, section, then ``order``.
+
+    Sections sort by their lowest ``order`` (plan order), not alphabetically.
+    """
+    tab_rank = {tab_id: index for index, (tab_id, _) in enumerate(CATALOG_TABS)}
+    group_rank = {group.id: group.order for group in WORKFLOW_GROUPS}
+    section_rank: dict[tuple[str, str, str], int] = {}
+    for test in tests:
+        key = (test["tab"], test["group"], test["section"])
+        section_rank[key] = min(section_rank.get(key, test["order"]), test["order"])
+    tests.sort(
+        key=lambda test: (
+            tab_rank[test["tab"]],
+            group_rank[test["group"]],
+            section_rank[(test["tab"], test["group"], test["section"])],
+            test["section"],
+            test["order"],
+            test["node_id"],
+        )
+    )
+
+
 def pytest_collection_finish(session: pytest.Session) -> None:
     destination = session.config.getoption("--e2e-manifest")
     if not destination:
         return
     tests = [entry for item in session.items if (entry := _serialize_item(item)) is not None]
     _validate_prerequisites(tests)
-    group_order = {group.id: group.order for group in WORKFLOW_GROUPS}
-    tests.sort(key=lambda test: (group_order[test["group"]], test["section"], test["order"], test["node_id"]))
+    _sort_catalog(tests)
     payload = {
         "tabs": [{"id": tab_id, "label": label} for tab_id, label in CATALOG_TABS],
         "groups": [
